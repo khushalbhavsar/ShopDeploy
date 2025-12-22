@@ -35,7 +35,8 @@ log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 get_ecr_url() {
     local component=$1
     AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-    echo "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/shopdeploy-${ENVIRONMENT}-${component}"
+    # Always use prod ECR repos (images are pushed to prod repos regardless of deployment environment)
+    echo "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/shopdeploy-prod-${component}"
 }
 
 #------------------------------------------------------------------------------
