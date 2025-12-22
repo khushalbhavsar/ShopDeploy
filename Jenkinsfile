@@ -12,7 +12,7 @@ pipeline {
     environment {
         // AWS Configuration
         AWS_REGION = 'us-east-1'
-        AWS_ACCOUNT_ID = credentials('348823728691') // AWS Account ID stored in Jenkins credentials
+        AWS_ACCOUNT_ID = 348823728691 // AWS Account ID stored in Jenkins credentials
         
         // ECR Configuration
         ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
