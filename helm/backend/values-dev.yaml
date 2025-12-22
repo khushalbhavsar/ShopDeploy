@@ -1,0 +1,70 @@
+#==============================================================================
+# ShopDeploy Backend - Development Values
+# Override configuration for development environment
+#==============================================================================
+
+global:
+  environment: development
+  namespace: shopdeploy-dev
+
+replicaCount: 1
+
+image:
+  pullPolicy: Always
+
+#------------------------------------------------------------------------------
+# Resource Configuration (Development - Low resources)
+#------------------------------------------------------------------------------
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+#------------------------------------------------------------------------------
+# Autoscaling - Disabled for development
+#------------------------------------------------------------------------------
+autoscaling:
+  enabled: false
+
+#------------------------------------------------------------------------------
+# Environment Variables
+#------------------------------------------------------------------------------
+env:
+  NODE_ENV: "development"
+  LOG_LEVEL: "debug"
+  PORT: "5000"
+
+#------------------------------------------------------------------------------
+# Service Configuration
+#------------------------------------------------------------------------------
+service:
+  type: ClusterIP
+  port: 5000
+
+#------------------------------------------------------------------------------
+# Ingress - Disabled for development
+#------------------------------------------------------------------------------
+ingress:
+  enabled: false
+
+#------------------------------------------------------------------------------
+# Pod Disruption Budget - Disabled for development
+#------------------------------------------------------------------------------
+podDisruptionBudget:
+  enabled: false
+
+#------------------------------------------------------------------------------
+# Probes - Relaxed for development
+#------------------------------------------------------------------------------
+livenessProbe:
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  failureThreshold: 5
+
+readinessProbe:
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  failureThreshold: 5

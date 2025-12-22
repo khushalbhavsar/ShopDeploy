@@ -22,13 +22,14 @@ terraform {
   }
 
   # Remote Backend Configuration - S3 + DynamoDB for State Locking
-  backend "s3" {
-    bucket         = "shopdeploy-terraform-state"
-    key            = "infrastructure/terraform.tfstate"
-    region         = "us-east-1"
-    encrypt        = true
-    dynamodb_table = "shopdeploy-terraform-locks"
-  }
+  # NOTE: Uncomment after creating S3 bucket and DynamoDB table
+  # backend "s3" {
+  #   bucket         = "shopdeploy-terraform-state"
+  #   key            = "infrastructure/terraform.tfstate"
+  #   region         = "us-east-1"
+  #   encrypt        = true
+  #   dynamodb_table = "shopdeploy-terraform-locks"
+  # }
 }
 
 #------------------------------------------------------------------------------

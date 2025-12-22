@@ -1,139 +1,141 @@
-# 🚀 ShopDeploy - EC2 Deployment Guide (Amazon Linux)
+# 🚀 ShopDeploy - Amazon Linux EC2 Deployment Guide
 
-Complete step-by-step guide to deploy ShopDeploy E-Commerce Application on Amazon Linux EC2.
+This guide provides step-by-step instructions to deploy the ShopDeploy E-Commerce application on an Amazon Linux EC2 instance.
 
 ---
 
 ## 📋 Table of Contents
 
-1. [Prerequisites](#1-prerequisites)
-2. [Launch EC2 Instance](#2-launch-ec2-instance)
-3. [Connect to EC2](#3-connect-to-ec2)
-4. [Install Dependencies](#4-install-dependencies)
-5. [Clone Repository](#5-clone-repository)
-6. [Configure Environment](#6-configure-environment)
-7. [Run with Docker Compose](#7-run-with-docker-compose)
-8. [Run Without Docker](#8-run-without-docker-manual-setup)
-9. [Configure Security Group](#9-configure-security-group)
-10. [Access Application](#10-access-application)
-11. [Setup as Service](#11-setup-as-systemd-service)
-12. [Troubleshooting](#12-troubleshooting)
+- [Prerequisites](#-prerequisites)
+- [Step 1: Launch EC2 Instance](#step-1-launch-ec2-instance)
+- [Step 2: Connect to EC2](#step-2-connect-to-ec2)
+- [Step 3: Install Dependencies](#step-3-install-dependencies)
+- [Step 4: Clone the Repository](#step-4-clone-the-repository)
+- [Step 5: Configure Environment Variables](#step-5-configure-environment-variables)
+- [Step 6: Deploy with Docker Compose](#step-6-deploy-with-docker-compose)
+- [Step 7: Verify Deployment](#step-7-verify-deployment)
+- [Troubleshooting](#-troubleshooting)
+- [Security Best Practices](#-security-best-practices)
 
 ---
 
-## 1. Prerequisites
+## 📦 Prerequisites
 
 Before starting, ensure you have:
 
 - ✅ AWS Account with EC2 access
-- ✅ Key Pair (.pem file) for SSH access
-- ✅ MongoDB Atlas connection string (or install MongoDB locally)
-- ✅ Stripe API keys (for payments)
-- ✅ Cloudinary credentials (for image uploads)
+- ✅ MongoDB Atlas account (or MongoDB instance)
+- ✅ Cloudinary account (for image uploads)
+- ✅ Stripe account (for payment processing)
+- ✅ SSH key pair for EC2 access
 
 ---
 
-## 2. Launch EC2 Instance
+## Step 1: Launch EC2 Instance
 
-### Step 2.1: Go to AWS Console
-```
-AWS Console → EC2 → Launch Instance
-```
+### 1.1 Go to AWS Console → EC2 → Launch Instance
 
-### Step 2.2: Configure Instance
+### 1.2 Configure Instance Settings:
 
 | Setting | Recommended Value |
 |---------|-------------------|
 | **Name** | `shopdeploy-server` |
 | **AMI** | Amazon Linux 2023 AMI |
-| **Instance Type** | `t2.medium` (minimum) or `t3.medium` |
-| **Key Pair** | Select or create new key pair |
-| **Storage** | 20 GB gp3 |
+| **Instance Type** | `t2.medium` or `t3.medium` (minimum 2GB RAM) |
+| **Key Pair** | Create new or select existing |
+| **Storage** | 20 GB gp3 (minimum) |
 
-### Step 2.3: Network Settings
-- ✅ Allow SSH (port 22) from your IP
-- ✅ Allow HTTP (port 80) from anywhere
-- ✅ Allow HTTPS (port 443) from anywhere
-- ✅ Allow Custom TCP (port 3000) from anywhere
-- ✅ Allow Custom TCP (port 5000) from anywhere
+### 1.3 Configure Security Group:
 
-### Step 2.4: Launch Instance
-Click **Launch Instance** and wait for it to be in **Running** state.
+Create a new security group with the following inbound rules:
+
+| Type | Port Range | Source | Description |
+|------|------------|--------|-------------|
+| SSH | 22 | Your IP | SSH access |
+| HTTP | 80 | 0.0.0.0/0 | Web traffic |
+| HTTPS | 443 | 0.0.0.0/0 | Secure web traffic |
+| Custom TCP | 3000 | 0.0.0.0/0 | Frontend |
+| Custom TCP | 5000 | 0.0.0.0/0 | Backend API |
+
+### 1.4 Launch the Instance
+
+Click **Launch Instance** and wait for it to start.
 
 ---
 
-## 3. Connect to EC2
+## Step 2: Connect to EC2
 
-### Option A: Using Terminal (Linux/Mac)
+### Option A: SSH from Terminal
+
 ```bash
-# Set permissions for key file
+# Change permissions of your key file
 chmod 400 your-key.pem
 
 # Connect to EC2
-ssh -i "your-key.pem" ec2-user@<EC2-PUBLIC-IP>
+ssh -i "your-key.pem" ec2-user@<YOUR-EC2-PUBLIC-IP>
 ```
 
-### Option B: Using PowerShell (Windows)
-```powershell
-ssh -i "your-key.pem" ec2-user@<EC2-PUBLIC-IP>
-```
+### Option B: EC2 Instance Connect
 
-### Option C: Using EC2 Instance Connect
-1. Go to EC2 Console
+1. Go to EC2 Dashboard → Instances
 2. Select your instance
-3. Click **Connect** → **EC2 Instance Connect** → **Connect**
+3. Click **Connect** → **EC2 Instance Connect**
+4. Click **Connect**
 
 ---
 
-## 4. Install Dependencies
+## Step 3: Install Dependencies
 
-### Step 4.1: Update System
+### 3.1 Update System Packages
+
 ```bash
-sudo dnf update -y
+sudo yum update -y
 ```
 
-### Step 4.2: Install Git
+### 3.2 Install Git
+
 ```bash
-sudo dnf install git -y
-git --version
+sudo yum install -y git
 ```
 
-### Step 4.3: Install Docker
+### 3.3 Install Docker
+
 ```bash
 # Install Docker
-sudo dnf install docker -y
+sudo yum install -y docker
 
 # Start Docker service
 sudo systemctl start docker
+
+# Enable Docker to start on boot
 sudo systemctl enable docker
 
-# Add ec2-user to docker group
+# Add ec2-user to docker group (to run docker without sudo)
 sudo usermod -aG docker ec2-user
 
-# Apply group changes (or logout and login again)
+# Apply group changes (logout and login required, or run)
 newgrp docker
-
-# Verify Docker
-docker --version
 ```
 
-### Step 4.4: Install Docker Compose
+### 3.4 Install Docker Compose
+
 ```bash
 # Download Docker Compose
 sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 
-# Make executable
+# Make it executable
 sudo chmod +x /usr/local/bin/docker-compose
 
 # Verify installation
 docker-compose --version
 ```
 
-### Step 4.5: Install Node.js (Optional - for non-Docker setup)
+### 3.5 (Optional) Install Node.js (for local development/testing)
+
 ```bash
 # Install Node.js 18.x
 curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
-sudo dnf install nodejs -y
+sudo yum install -y nodejs
 
 # Verify installation
 node --version
@@ -142,402 +144,347 @@ npm --version
 
 ---
 
-## 5. Clone Repository
+## Step 4: Clone the Repository
 
 ```bash
 # Navigate to home directory
 cd ~
 
 # Clone the repository
-git clone https://github.com/khushalbhavsar/shopdeploy.git
+git clone https://github.com/YOUR-USERNAME/ShopDeploy.git
 
 # Navigate to project directory
-cd shopdeploy
+cd ShopDeploy
 ```
 
 ---
 
-## 6. Configure Environment
+## Step 5: Configure Environment Variables
 
-### Step 6.1: Create Backend Environment File
+### 5.1 Create Backend Environment File
+
 ```bash
-# Navigate to backend
-cd ~/shopdeploy/shopdeploy-backend
-
-# Create .env file
-nano .env
+# Create .env file in the shopdeploy-backend directory
+nano shopdeploy-backend/.env
 ```
 
-### Step 6.2: Add Backend Environment Variables
+Add the following content (replace with your actual values):
+
 ```env
 # Server Configuration
 NODE_ENV=production
 PORT=5000
 
-# MongoDB Connection
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/shopdeploy?retryWrites=true&w=majority
+# MongoDB Configuration
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/shopdeploy?retryWrites=true&w=majority
 
-# JWT Secrets (Generate strong random strings)
-JWT_ACCESS_SECRET=your-super-secret-access-key-min-32-chars
-JWT_REFRESH_SECRET=your-super-secret-refresh-key-min-32-chars
+# JWT Configuration
+JWT_ACCESS_SECRET=your-super-secure-access-secret-key-here
+JWT_REFRESH_SECRET=your-super-secure-refresh-secret-key-here
 JWT_ACCESS_EXPIRE=15m
 JWT_REFRESH_EXPIRE=7d
 
-# Stripe Payment
-STRIPE_SECRET_KEY=sk_live_your_stripe_secret_key
-
-# Cloudinary Image Upload
-CLOUDINARY_CLOUD_NAME=your-cloud-name
-CLOUDINARY_API_KEY=your-api-key
-CLOUDINARY_API_SECRET=your-api-secret
-
 # Frontend URL (for CORS)
-FRONTEND_URL=http://<EC2-PUBLIC-IP>:3000
+FRONTEND_URL=http://<YOUR-EC2-PUBLIC-IP>:3000
+
+# Cloudinary Configuration (for image uploads)
+CLOUDINARY_CLOUD_NAME=your-cloudinary-cloud-name
+CLOUDINARY_API_KEY=your-cloudinary-api-key
+CLOUDINARY_API_SECRET=your-cloudinary-api-secret
+
+# Stripe Configuration (for payments)
+STRIPE_SECRET_KEY=sk_test_your-stripe-secret-key
 ```
 
-Save and exit: `Ctrl + X`, then `Y`, then `Enter`
+Press `Ctrl + X`, then `Y`, then `Enter` to save.
 
-### Step 6.3: Create Frontend Environment File
+### 5.2 Create Root .env File (for Docker Compose)
+
 ```bash
-# Navigate to frontend
-cd ~/shopdeploy/shopdeploy-frontend
-
-# Create .env file
+# Create .env file in the root directory
 nano .env
 ```
 
-### Step 6.4: Add Frontend Environment Variables
+Add the following content:
+
 ```env
-VITE_API_URL=http://<EC2-PUBLIC-IP>:5000/api
+# MongoDB
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/shopdeploy?retryWrites=true&w=majority
+
+# JWT Secrets
+JWT_ACCESS_SECRET=your-super-secure-access-secret-key-here
+JWT_REFRESH_SECRET=your-super-secure-refresh-secret-key-here
+JWT_ACCESS_EXPIRE=15m
+JWT_REFRESH_EXPIRE=7d
+
+# URLs
+FRONTEND_URL=http://<YOUR-EC2-PUBLIC-IP>:3000
+VITE_API_URL=http://<YOUR-EC2-PUBLIC-IP>:5000/api
+
+# Cloudinary
+CLOUDINARY_CLOUD_NAME=your-cloudinary-cloud-name
+CLOUDINARY_API_KEY=your-cloudinary-api-key
+CLOUDINARY_API_SECRET=your-cloudinary-api-secret
+
+# Stripe
+STRIPE_SECRET_KEY=sk_test_your-stripe-secret-key
 ```
 
-Save and exit: `Ctrl + X`, then `Y`, then `Enter`
+Press `Ctrl + X`, then `Y`, then `Enter` to save.
 
 ---
 
-## 7. Run with Docker Compose
+## Step 6: Deploy with Docker Compose
 
-### Step 7.1: Navigate to Project Root
+### 6.1 Build and Start Containers
+
 ```bash
-cd ~/shopdeploy
+# Build the containers (first time)
+docker-compose build
+
+# Start the containers in detached mode
+docker-compose up -d
 ```
 
-### Step 7.2: Build and Start Containers
+### 6.2 View Container Logs
+
 ```bash
-# Build and run in detached mode
-docker-compose up -d --build
-
-# View running containers
-docker ps
-
-# View logs
+# View all container logs
 docker-compose logs -f
+
+# View specific container logs
+docker-compose logs -f backend
+docker-compose logs -f frontend
 ```
 
-### Step 7.3: Verify Containers
+### 6.3 Check Container Status
+
 ```bash
-# Check container status
 docker-compose ps
-
-# Expected output:
-# NAME                    STATUS
-# shopdeploy-backend      Up
-# shopdeploy-frontend     Up
-# shopdeploy-mongodb      Up (if using local MongoDB)
 ```
 
-### Step 7.4: Stop Containers (When needed)
+Expected output:
+```
+NAME                    COMMAND                  SERVICE     STATUS          PORTS
+shopdeploy-backend      "node src/server.js"     backend     running (healthy)   0.0.0.0:5000->5000/tcp
+shopdeploy-frontend     "nginx -g 'daemon off;'" frontend    running (healthy)   0.0.0.0:3000->80/tcp
+```
+
+---
+
+## Step 7: Verify Deployment
+
+### 7.1 Test Backend API
+
 ```bash
-# Stop all containers
+# Health check
+curl http://localhost:5000/api/health/health
+
+# Or from your browser
+# http://<YOUR-EC2-PUBLIC-IP>:5000/api/health/health
+```
+
+### 7.2 Access Frontend
+
+Open your browser and navigate to:
+```
+http://<YOUR-EC2-PUBLIC-IP>:3000
+```
+
+### 7.3 Seed Sample Data (Optional)
+
+```bash
+# Enter the backend container
+docker exec -it shopdeploy-backend sh
+
+# Run seed script
+npm run seed
+
+# Exit container
+exit
+```
+
+---
+
+## 🔄 Managing the Application
+
+### Stop the Application
+
+```bash
 docker-compose down
-
-# Stop and remove volumes
-docker-compose down -v
 ```
 
----
-
-## 8. Run Without Docker (Manual Setup)
-
-### Step 8.1: Install MongoDB (If not using Atlas)
-```bash
-# Create MongoDB repo file
-sudo nano /etc/yum.repos.d/mongodb-org-7.0.repo
-```
-
-Add the following content:
-```ini
-[mongodb-org-7.0]
-name=MongoDB Repository
-baseurl=https://repo.mongodb.org/yum/amazon/2023/mongodb-org/7.0/x86_64/
-gpgcheck=1
-enabled=1
-gpgkey=https://pgp.mongodb.com/server-7.0.asc
-```
+### Restart the Application
 
 ```bash
-# Install MongoDB
-sudo dnf install mongodb-org -y
-
-# Start MongoDB
-sudo systemctl start mongod
-sudo systemctl enable mongod
-
-# Verify MongoDB
-sudo systemctl status mongod
+docker-compose restart
 ```
 
-### Step 8.2: Start Backend
+### Update the Application
+
 ```bash
-# Navigate to backend
-cd ~/shopdeploy/shopdeploy-backend
+# Pull latest changes
+git pull origin main
 
-# Install dependencies
-npm ci --production
-
-# Start backend (using PM2 for production)
-npm install -g pm2
-pm2 start src/server.js --name shopdeploy-backend
-
-# Save PM2 process list
-pm2 save
-
-# Setup PM2 startup script
-pm2 startup
+# Rebuild and restart containers
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
 ```
 
-### Step 8.3: Build and Serve Frontend
+### View Logs
+
 ```bash
-# Navigate to frontend
-cd ~/shopdeploy/shopdeploy-frontend
-
-# Install dependencies
-npm ci
-
-# Build for production
-npm run build
-
-# Install serve globally
-npm install -g serve
-
-# Serve the built files
-pm2 start serve --name shopdeploy-frontend -- -s dist -l 3000
-
-# Save PM2 configuration
-pm2 save
-```
-
-### Step 8.4: Verify Services
-```bash
-# Check PM2 processes
-pm2 list
-
-# View logs
-pm2 logs
-
-# Monitor resources
-pm2 monit
-```
-
----
-
-## 9. Configure Security Group
-
-Ensure your EC2 Security Group has the following inbound rules:
-
-| Type | Protocol | Port Range | Source | Description |
-|------|----------|------------|--------|-------------|
-| SSH | TCP | 22 | Your IP | SSH Access |
-| HTTP | TCP | 80 | 0.0.0.0/0 | Web Traffic |
-| HTTPS | TCP | 443 | 0.0.0.0/0 | Secure Web Traffic |
-| Custom TCP | TCP | 3000 | 0.0.0.0/0 | Frontend |
-| Custom TCP | TCP | 5000 | 0.0.0.0/0 | Backend API |
-
-### Update Security Group via AWS CLI
-```bash
-# Get your Security Group ID
-SECURITY_GROUP_ID=sg-xxxxxxxxx
-
-# Add rules
-aws ec2 authorize-security-group-ingress \
-    --group-id $SECURITY_GROUP_ID \
-    --protocol tcp \
-    --port 3000 \
-    --cidr 0.0.0.0/0
-
-aws ec2 authorize-security-group-ingress \
-    --group-id $SECURITY_GROUP_ID \
-    --protocol tcp \
-    --port 5000 \
-    --cidr 0.0.0.0/0
-```
-
----
-
-## 10. Access Application
-
-### Frontend (React App)
-```
-http://<EC2-PUBLIC-IP>:3000
-```
-
-### Backend API
-```
-http://<EC2-PUBLIC-IP>:5000/api
-```
-
-### Health Check
-```
-http://<EC2-PUBLIC-IP>:5000/api/health/health
-```
-
-### Find Your EC2 Public IP
-```bash
-# From within EC2
-curl http://169.254.169.254/latest/meta-data/public-ipv4
-
-# Or check AWS Console
-```
-
----
-
-## 11. Setup as Systemd Service
-
-### Step 11.1: Create Backend Service
-```bash
-sudo nano /etc/systemd/system/shopdeploy-backend.service
-```
-
-Add the following content:
-```ini
-[Unit]
-Description=ShopDeploy Backend API
-After=network.target
-
-[Service]
-Type=simple
-User=ec2-user
-WorkingDirectory=/home/ec2-user/shopdeploy/shopdeploy-backend
-ExecStart=/usr/bin/node src/server.js
-Restart=on-failure
-RestartSec=10
-Environment=NODE_ENV=production
-EnvironmentFile=/home/ec2-user/shopdeploy/shopdeploy-backend/.env
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### Step 11.2: Enable and Start Service
-```bash
-# Reload systemd
-sudo systemctl daemon-reload
-
-# Enable service
-sudo systemctl enable shopdeploy-backend
-
-# Start service
-sudo systemctl start shopdeploy-backend
-
-# Check status
-sudo systemctl status shopdeploy-backend
-```
-
----
-
-## 12. Troubleshooting
-
-### Check Container Logs
-```bash
-# All containers
+# All services
 docker-compose logs -f
 
-# Specific container
-docker logs shopdeploy-backend -f
-docker logs shopdeploy-frontend -f
+# Specific service
+docker-compose logs -f backend
 ```
 
-### Check Application Logs
-```bash
-# PM2 logs
-pm2 logs shopdeploy-backend
-pm2 logs shopdeploy-frontend
+### Clean Up Docker Resources
 
-# Systemd logs
-sudo journalctl -u shopdeploy-backend -f
+```bash
+# Remove unused images
+docker image prune -a
+
+# Remove all stopped containers
+docker container prune
+
+# Remove unused volumes
+docker volume prune
 ```
 
-### Common Issues
+---
 
-#### Issue: Port Already in Use
+## 🔧 Troubleshooting
+
+### Issue: Docker command not found
+
 ```bash
-# Find process using port
+# Verify Docker is installed
+sudo systemctl status docker
+
+# If not running, start Docker
+sudo systemctl start docker
+```
+
+### Issue: Permission denied when running Docker
+
+```bash
+# Add user to docker group
+sudo usermod -aG docker $USER
+
+# Apply changes
+newgrp docker
+
+# Or logout and login again
+```
+
+### Issue: Port already in use
+
+```bash
+# Find process using the port
 sudo lsof -i :5000
 sudo lsof -i :3000
 
-# Kill process
+# Kill the process if needed
 sudo kill -9 <PID>
 ```
 
-#### Issue: Permission Denied (Docker)
-```bash
-# Add user to docker group
-sudo usermod -aG docker ec2-user
+### Issue: Container keeps restarting
 
-# Logout and login again
-exit
-# Reconnect via SSH
+```bash
+# Check container logs
+docker-compose logs backend
+
+# Common issues:
+# - Invalid MongoDB connection string
+# - Missing environment variables
+# - Incorrect Cloudinary/Stripe credentials
 ```
 
-#### Issue: MongoDB Connection Failed
+### Issue: Frontend can't connect to Backend
+
+1. Verify `VITE_API_URL` in `.env` points to correct backend URL
+2. Ensure backend container is healthy: `docker-compose ps`
+3. Check security group allows port 5000
+
+### Issue: MongoDB connection failed
+
+1. Verify MongoDB Atlas whitelist includes EC2's public IP (or use `0.0.0.0/0`)
+2. Check MongoDB URI is correct in `.env`
+3. Ensure username/password don't contain special characters without URL encoding
+
+---
+
+## 🔒 Security Best Practices
+
+### 1. Use Strong Secrets
+
+Generate secure JWT secrets:
 ```bash
-# Check MongoDB status
-sudo systemctl status mongod
-
-# Check MongoDB logs
-sudo tail -f /var/log/mongodb/mongod.log
-
-# Verify connection string in .env file
+openssl rand -base64 64
 ```
 
-#### Issue: Cannot Access from Browser
+### 2. Restrict Security Group
+
+- Limit SSH access to your IP only
+- Consider using AWS Systems Manager Session Manager instead of SSH
+
+### 3. Enable HTTPS
+
+Use a reverse proxy like Nginx with Let's Encrypt:
+
 ```bash
-# Check if services are running
-docker ps
-# or
-pm2 list
+# Install Nginx
+sudo yum install -y nginx
 
-# Check security group rules in AWS Console
-# Ensure ports 3000 and 5000 are open
+# Install Certbot
+sudo yum install -y certbot python3-certbot-nginx
 
-# Check firewall (if enabled)
-sudo firewall-cmd --list-all
+# Get SSL certificate
+sudo certbot --nginx -d yourdomain.com
 ```
 
-#### Issue: Environment Variables Not Loading
-```bash
-# Verify .env file exists
-cat ~/shopdeploy/shopdeploy-backend/.env
+### 4. Use AWS Secrets Manager
 
-# Check file permissions
-ls -la ~/shopdeploy/shopdeploy-backend/.env
+Store sensitive credentials in AWS Secrets Manager instead of `.env` files.
+
+### 5. Regular Updates
+
+```bash
+# Update system packages regularly
+sudo yum update -y
+```
+
+### 6. Monitor Logs
+
+```bash
+# Monitor Docker logs
+docker-compose logs -f
+
+# Monitor system logs
+sudo journalctl -f
 ```
 
 ---
 
-## 🎉 Deployment Complete!
+## 📊 Production Recommendations
 
-Your ShopDeploy application should now be running on:
-
-| Service | URL |
-|---------|-----|
-| **Frontend** | `http://<EC2-PUBLIC-IP>:3000` |
-| **Backend API** | `http://<EC2-PUBLIC-IP>:5000/api` |
-| **Health Check** | `http://<EC2-PUBLIC-IP>:5000/api/health/health` |
+| Aspect | Recommendation |
+|--------|----------------|
+| **Instance Type** | `t3.medium` or larger for production |
+| **Load Balancer** | Use Application Load Balancer (ALB) |
+| **Database** | Use MongoDB Atlas with dedicated cluster |
+| **SSL/TLS** | Use AWS Certificate Manager with ALB |
+| **Monitoring** | Enable CloudWatch monitoring |
+| **Backups** | Enable EBS snapshots |
+| **Auto Scaling** | Configure Auto Scaling Group |
 
 ---
 
-## 📌 Quick Reference Commands
+## 🎯 Quick Reference Commands
 
 ```bash
 # Start application
@@ -549,35 +496,32 @@ docker-compose down
 # View logs
 docker-compose logs -f
 
-# Restart containers
+# Restart application
 docker-compose restart
 
-# Rebuild and restart
-docker-compose up -d --build
+# Rebuild containers
+docker-compose build --no-cache
 
-# Check running containers
-docker ps
+# Check container status
+docker-compose ps
 
-# PM2 commands (non-Docker)
-pm2 list
-pm2 restart all
-pm2 logs
-pm2 monit
+# Enter backend container
+docker exec -it shopdeploy-backend sh
+
+# Enter frontend container
+docker exec -it shopdeploy-frontend sh
 ```
 
 ---
 
-## 🔒 Production Recommendations
+## 📞 Support
 
-1. **Use HTTPS** - Setup SSL with Let's Encrypt and Nginx reverse proxy
-2. **Use Domain** - Point a domain to your EC2 Elastic IP
-3. **Enable Monitoring** - Setup CloudWatch alarms
-4. **Backup Database** - Enable MongoDB Atlas backups or setup local backups
-5. **Use Load Balancer** - For high availability
-6. **Auto Scaling** - Setup Auto Scaling Group for traffic spikes
+If you encounter issues:
+
+1. Check the [Troubleshooting](#-troubleshooting) section
+2. Review container logs: `docker-compose logs -f`
+3. Open an issue on GitHub
 
 ---
 
-<p align="center">
-  <b>Happy Deploying! 🚀</b>
-</p>
+**Happy Deploying! 🚀**

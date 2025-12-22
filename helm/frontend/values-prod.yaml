@@ -1,0 +1,134 @@
+#==============================================================================
+# ShopDeploy Frontend - Production Values
+# Override configuration for production environment
+#==============================================================================
+
+global:
+  environment: production
+  namespace: shopdeploy
+
+replicaCount: 3
+
+image:
+  pullPolicy: IfNotPresent
+
+#------------------------------------------------------------------------------
+# Resource Configuration (Production - High resources)
+#------------------------------------------------------------------------------
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+#------------------------------------------------------------------------------
+# Autoscaling Configuration
+#------------------------------------------------------------------------------
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 15
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 75
+
+#------------------------------------------------------------------------------
+# Environment Variables
+#------------------------------------------------------------------------------
+env:
+  VITE_API_URL: "https://api.shopdeploy.example.com"
+
+#------------------------------------------------------------------------------
+# Service Configuration
+#------------------------------------------------------------------------------
+service:
+  type: ClusterIP
+  port: 80
+
+#------------------------------------------------------------------------------
+# Ingress Configuration
+#------------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: "alb"
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/certificate-arn: ""  # Add your ACM certificate ARN
+  hosts:
+    - host: www.shopdeploy.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+    - host: shopdeploy.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: frontend-tls
+      hosts:
+        - www.shopdeploy.example.com
+        - shopdeploy.example.com
+
+#------------------------------------------------------------------------------
+# Pod Disruption Budget
+#------------------------------------------------------------------------------
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+#------------------------------------------------------------------------------
+# Affinity - Spread across availability zones
+#------------------------------------------------------------------------------
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - frontend
+          topologyKey: topology.kubernetes.io/zone
+      - weight: 50
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - frontend
+          topologyKey: kubernetes.io/hostname
+
+#------------------------------------------------------------------------------
+# Node Selector
+#------------------------------------------------------------------------------
+nodeSelector:
+  kubernetes.io/os: linux
+
+#------------------------------------------------------------------------------
+# Security Context
+#------------------------------------------------------------------------------
+podSecurityContext:
+  runAsNonRoot: false
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+#------------------------------------------------------------------------------
+# Service Monitor for Prometheus
+#------------------------------------------------------------------------------
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  scrapeTimeout: 10s

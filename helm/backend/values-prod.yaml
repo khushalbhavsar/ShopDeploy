@@ -1,0 +1,163 @@
+#==============================================================================
+# ShopDeploy Backend - Production Values
+# Override configuration for production environment
+#==============================================================================
+
+global:
+  environment: production
+  namespace: shopdeploy
+
+replicaCount: 3
+
+image:
+  pullPolicy: IfNotPresent
+
+#------------------------------------------------------------------------------
+# Resource Configuration (Production - High resources)
+#------------------------------------------------------------------------------
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1024Mi
+
+#------------------------------------------------------------------------------
+# Autoscaling Configuration
+#------------------------------------------------------------------------------
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 75
+
+#------------------------------------------------------------------------------
+# Environment Variables
+#------------------------------------------------------------------------------
+env:
+  NODE_ENV: "production"
+  LOG_LEVEL: "warn"
+  PORT: "5000"
+
+#------------------------------------------------------------------------------
+# Service Configuration
+#------------------------------------------------------------------------------
+service:
+  type: ClusterIP
+  port: 5000
+
+#------------------------------------------------------------------------------
+# Ingress Configuration
+#------------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: "alb"
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /api/health
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/certificate-arn: ""  # Add your ACM certificate ARN
+  hosts:
+    - host: api.shopdeploy.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: backend-tls
+      hosts:
+        - api.shopdeploy.example.com
+
+#------------------------------------------------------------------------------
+# Pod Disruption Budget
+#------------------------------------------------------------------------------
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+#------------------------------------------------------------------------------
+# Affinity - Spread across availability zones
+#------------------------------------------------------------------------------
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - backend
+          topologyKey: topology.kubernetes.io/zone
+      - weight: 50
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - backend
+          topologyKey: kubernetes.io/hostname
+
+#------------------------------------------------------------------------------
+# Node Selector
+#------------------------------------------------------------------------------
+nodeSelector:
+  kubernetes.io/os: linux
+
+#------------------------------------------------------------------------------
+# Tolerations
+#------------------------------------------------------------------------------
+tolerations: []
+
+#------------------------------------------------------------------------------
+# Probes - Production configuration
+#------------------------------------------------------------------------------
+livenessProbe:
+  httpGet:
+    path: /api/health
+    port: 5000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+  successThreshold: 1
+
+readinessProbe:
+  httpGet:
+    path: /api/health
+    port: 5000
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+  successThreshold: 1
+
+#------------------------------------------------------------------------------
+# Security Context
+#------------------------------------------------------------------------------
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  fsGroup: 1001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+#------------------------------------------------------------------------------
+# Service Monitor for Prometheus
+#------------------------------------------------------------------------------
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  scrapeTimeout: 10s

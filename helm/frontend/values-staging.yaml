@@ -1,0 +1,69 @@
+#==============================================================================
+# ShopDeploy Frontend - Staging Values
+# Override configuration for staging environment
+#==============================================================================
+
+global:
+  environment: staging
+  namespace: shopdeploy-staging
+
+replicaCount: 2
+
+image:
+  pullPolicy: IfNotPresent
+
+#------------------------------------------------------------------------------
+# Resource Configuration (Staging - Medium resources)
+#------------------------------------------------------------------------------
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+#------------------------------------------------------------------------------
+# Autoscaling Configuration
+#------------------------------------------------------------------------------
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 75
+
+#------------------------------------------------------------------------------
+# Environment Variables
+#------------------------------------------------------------------------------
+env:
+  VITE_API_URL: "https://api-staging.shopdeploy.example.com"
+
+#------------------------------------------------------------------------------
+# Service Configuration
+#------------------------------------------------------------------------------
+service:
+  type: ClusterIP
+  port: 80
+
+#------------------------------------------------------------------------------
+# Ingress Configuration
+#------------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: "alb"
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+  hosts:
+    - host: staging.shopdeploy.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+
+#------------------------------------------------------------------------------
+# Pod Disruption Budget
+#------------------------------------------------------------------------------
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
