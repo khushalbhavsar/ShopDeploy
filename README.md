@@ -7,10 +7,12 @@
   <img src="https://img.shields.io/badge/MongoDB-8.x-47A248?style=for-the-badge&logo=mongodb" alt="MongoDB"/>
   <img src="https://img.shields.io/badge/Docker-Containerized-2496ED?style=for-the-badge&logo=docker" alt="Docker"/>
   <img src="https://img.shields.io/badge/Kubernetes-EKS-326CE5?style=for-the-badge&logo=kubernetes" alt="Kubernetes"/>
+  <img src="https://img.shields.io/badge/Terraform-IaC-7B42BC?style=for-the-badge&logo=terraform" alt="Terraform"/>
+  <img src="https://img.shields.io/badge/Jenkins-CI%2FCD-D24939?style=for-the-badge&logo=jenkins" alt="Jenkins"/>
 </p>
 
 <p align="center">
-  <b>A full-stack e-commerce application with complete DevOps implementation including CI/CD, Kubernetes deployment, and cloud-native infrastructure.</b>
+  <b>A production-ready full-stack e-commerce application with complete DevOps implementation including CI/CD, Kubernetes deployment, Infrastructure as Code, and cloud-native infrastructure on AWS.</b>
 </p>
 
 ---
@@ -20,12 +22,15 @@
 - [Overview](#-overview)
 - [Features](#-features)
 - [Tech Stack](#-tech-stack)
+- [Architecture](#-architecture)
 - [Project Structure](#-project-structure)
 - [Getting Started](#-getting-started)
 - [Local Development](#-local-development)
 - [Docker Deployment](#-docker-deployment)
 - [Kubernetes Deployment](#-kubernetes-deployment)
-- [DevOps Infrastructure](#-devops-infrastructure)
+- [Infrastructure (Terraform)](#-infrastructure-terraform)
+- [CI/CD Pipeline](#-cicd-pipeline)
+- [Monitoring](#-monitoring)
 - [API Documentation](#-api-documentation)
 - [Environment Variables](#-environment-variables)
 - [Contributing](#-contributing)
@@ -35,14 +40,17 @@
 
 ## 🎯 Overview
 
-**ShopDeploy** is a modern, production-ready e-commerce platform built with the MERN stack (MongoDB, Express, React, Node.js). The project demonstrates enterprise-level development practices and includes a comprehensive DevOps implementation with:
+**ShopDeploy** is a modern, production-ready e-commerce platform built with the MERN stack (MongoDB, Express, React, Node.js). This project demonstrates enterprise-level development practices and includes a comprehensive DevOps implementation:
 
-- 🏗️ **Infrastructure as Code** using Terraform
-- 🐳 **Containerization** with Docker
-- ☸️ **Orchestration** on AWS EKS (Kubernetes)
-- 🔄 **CI/CD Pipeline** with Jenkins
-- 📊 **Monitoring** with Prometheus & Grafana
-- 📦 **Package Management** with Helm Charts
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| 🏗️ **Infrastructure as Code** | Terraform | Automated AWS infrastructure provisioning |
+| 🐳 **Containerization** | Docker | Consistent application packaging |
+| ☸️ **Orchestration** | AWS EKS (Kubernetes) | Container orchestration & scaling |
+| 🔄 **CI/CD Pipeline** | Jenkins | Automated build, test, and deployment |
+| 📊 **Monitoring** | Prometheus & Grafana | Metrics collection and visualization |
+| 📦 **Package Management** | Helm Charts | Kubernetes application packaging |
+| 🔐 **Security** | JWT, HTTPS, IAM Roles | Authentication and authorization |
 
 ---
 
@@ -144,6 +152,7 @@ ShopDeploy/
 │   ├── main.tf                     # Main Terraform config
 │   ├── variables.tf                # Input variables
 │   ├── outputs.tf                  # Output values
+│   ├── README.md                   # Terraform documentation
 │   └── modules/                    # Terraform modules
 │       ├── vpc/                    # VPC configuration
 │       ├── iam/                    # IAM roles & policies
@@ -159,7 +168,13 @@ ShopDeploy/
 │   ├── backend-deployment.yaml
 │   ├── frontend-deployment.yaml
 │   ├── ingress.yaml
-│   └── hpa.yaml
+│   ├── hpa.yaml
+│   └── README.md                   # K8s documentation
+│
+├── 📂 docs/                        # Documentation
+│   ├── HELM-SETUP-GUIDE.md
+│   ├── JENKINS-SETUP-GUIDE.md
+│   └── MONITORING-SETUP-GUIDE.md
 │
 ├── 📂 monitoring/                  # Monitoring configuration
 │   ├── prometheus-values.yaml
@@ -167,14 +182,60 @@ ShopDeploy/
 │   └── dashboards/
 │
 ├── 📂 scripts/                     # Automation scripts
-│   ├── ec2-bootstrap.sh
-│   ├── build.sh
-│   ├── deploy.sh
+│   ├── ec2-bootstrap.sh            # EC2 instance setup
+│   ├── build.sh                    # Docker build script
+│   ├── deploy.sh                   # Deployment script
+│   ├── helm-deploy.sh              # Helm deployment
+│   ├── install-*.sh                # Tool installation scripts
 │   └── ...
 │
 ├── 📄 Jenkinsfile                  # CI/CD Pipeline
 ├── 📄 docker-compose.yml           # Local Docker setup
+├── 📄 DEVOPS-SETUP-GUIDE.md        # DevOps setup guide
+├── 📄 EC2-DEPLOYMENT-GUIDE.md      # EC2 deployment guide
 └── 📄 README.md                    # This file
+```
+
+---
+
+## 🏛️ Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                           ShopDeploy Architecture                            │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│    ┌─────────────┐         ┌─────────────┐         ┌─────────────┐          │
+│    │   GitHub    │────────▶│   Jenkins   │────────▶│     ECR     │          │
+│    │ Repository  │         │   CI/CD     │         │  Registry   │          │
+│    └─────────────┘         └─────────────┘         └──────┬──────┘          │
+│                                                           │                  │
+│    ┌──────────────────────────────────────────────────────┼─────────────┐   │
+│    │                        AWS Cloud                     │             │   │
+│    │                                                      ▼             │   │
+│    │   ┌────────────────────────────────────────────────────────────┐  │   │
+│    │   │                    EKS Cluster                             │  │   │
+│    │   │  ┌─────────────────────────────────────────────────────┐   │  │   │
+│    │   │  │                  Kubernetes                         │   │  │   │
+│    │   │  │                                                     │   │  │   │
+│    │   │  │   ┌─────────┐    ┌─────────┐    ┌─────────┐        │   │  │   │
+│    │   │  │   │Frontend │    │ Backend │    │ MongoDB │        │   │  │   │
+│    │   │  │   │  Pods   │───▶│  Pods   │───▶│   Pod   │        │   │  │   │
+│    │   │  │   └─────────┘    └─────────┘    └─────────┘        │   │  │   │
+│    │   │  │        │                                            │   │  │   │
+│    │   │  │   ┌────┴────┐                                       │   │  │   │
+│    │   │  │   │ Ingress │◀──────────────(Users)                 │   │  │   │
+│    │   │  │   │   ALB   │                                       │   │  │   │
+│    │   │  │   └─────────┘                                       │   │  │   │
+│    │   │  └─────────────────────────────────────────────────────┘   │  │   │
+│    │   └────────────────────────────────────────────────────────────┘  │   │
+│    │                                                                    │   │
+│    │   ┌───────────────┐    ┌───────────────┐                          │   │
+│    │   │  Prometheus   │───▶│    Grafana    │  (Monitoring)            │   │
+│    │   └───────────────┘    └───────────────┘                          │   │
+│    └────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -324,38 +385,131 @@ kubectl get all -n shopdeploy
 
 ---
 
-## 🏗 DevOps Infrastructure
+## 🏗️ Infrastructure (Terraform)
 
-### Infrastructure Provisioning (Terraform)
+> 📖 For detailed Terraform documentation, see [terraform/README.md](terraform/README.md)
+
+### Why Terraform?
+
+- **Infrastructure as Code**: Version control your cloud infrastructure
+- **Reproducibility**: Create identical environments consistently
+- **Automation**: Eliminate manual AWS console configuration
+- **Cost Management**: Easily destroy non-production environments
+
+### What Gets Created
+
+| Module | Resources |
+|--------|-----------|
+| **VPC** | VPC, Subnets (public/private), NAT Gateway, Internet Gateway, Route Tables |
+| **IAM** | EKS Cluster Role, Node Role, Service Account Roles |
+| **ECR** | Container repositories for backend and frontend images |
+| **EKS** | Kubernetes cluster, Node Groups, Add-ons (CoreDNS, VPC-CNI) |
+
+### Quick Start
 
 ```bash
 cd terraform
 
-# Initialize Terraform
-./scripts/terraform-init.sh prod
+# 1. Configure variables
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your values
 
-# Plan changes
+# 2. Initialize Terraform
+terraform init
+
+# 3. Preview changes
 terraform plan
 
-# Apply infrastructure
+# 4. Apply infrastructure (takes ~15-20 minutes)
 terraform apply
 
-# Configure kubectl
+# 5. Configure kubectl
 aws eks update-kubeconfig --region us-east-1 --name shopdeploy-prod-eks
+
+# Verify connection
+kubectl get nodes
 ```
 
-### CI/CD Pipeline (Jenkins)
+### Destroy Infrastructure
 
-The project includes a comprehensive Jenkins pipeline that:
+```bash
+# CAUTION: This will delete all resources
+terraform destroy
+```
 
-1. **Checkout** - Clones the repository
-2. **Install Dependencies** - Runs `npm ci`
-3. **Code Quality** - Linting and security scanning
-4. **Test** - Unit tests with coverage
-5. **Build** - Multi-stage Docker builds
-6. **Push** - Push images to ECR
-7. **Deploy** - Helm deployment to EKS
-8. **Smoke Tests** - Post-deployment verification
+---
+
+## 🔄 CI/CD Pipeline
+
+> 📖 For Jenkins setup guide, see [docs/JENKINS-SETUP-GUIDE.md](docs/JENKINS-SETUP-GUIDE.md)
+
+### Pipeline Stages
+
+```
+┌──────────┐   ┌───────────┐   ┌────────────┐   ┌───────────┐
+│ Checkout │──▶│   Build   │──▶│    Test    │──▶│   Scan    │
+└──────────┘   └───────────┘   └────────────┘   └───────────┘
+                                                      │
+┌──────────┐   ┌───────────┐   ┌────────────┐        │
+│  Smoke   │◀──│  Deploy   │◀──│ Push ECR   │◀───────┘
+│  Tests   │   │   (EKS)   │   │            │
+└──────────┘   └───────────┘   └────────────┘
+```
+
+| Stage | Description |
+|-------|-------------|
+| **Checkout** | Clone repository from GitHub |
+| **Install Dependencies** | Run `npm ci` for backend/frontend |
+| **Code Quality** | SonarQube analysis (optional) |
+| **Unit Tests** | Run Jest tests with coverage |
+| **Docker Build** | Multi-stage Docker builds |
+| **Push to ECR** | Push images to AWS ECR |
+| **Deploy** | Helm deployment to EKS |
+| **Smoke Tests** | Verify deployment health |
+
+### Running the Pipeline
+
+```bash
+# Trigger manually in Jenkins UI
+# Or push to main branch (auto-trigger via webhook)
+
+# Build with parameters
+- ENVIRONMENT: dev | staging | prod
+- SKIP_TESTS: false
+- SKIP_SONAR: true (until SonarQube is configured)
+```
+
+---
+
+## 📊 Monitoring
+
+> 📖 For monitoring setup, see [docs/MONITORING-SETUP-GUIDE.md](docs/MONITORING-SETUP-GUIDE.md)
+
+### Stack
+
+- **Prometheus**: Metrics collection
+- **Grafana**: Visualization and dashboards
+- **Custom Dashboards**: ShopDeploy-specific metrics
+
+### Installation
+
+```bash
+# Install monitoring stack
+./monitoring/install-monitoring.sh
+
+# Access Grafana (default: admin/admin)
+kubectl port-forward svc/grafana 3000:80 -n monitoring
+
+# Access Prometheus
+kubectl port-forward svc/prometheus-server 9090:80 -n monitoring
+```
+
+### Available Dashboards
+
+- Kubernetes Cluster Overview
+- Node Metrics
+- Pod Metrics
+- ShopDeploy Application Dashboard
 
 ### Monitoring Setup
 

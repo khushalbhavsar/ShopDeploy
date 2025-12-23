@@ -1,49 +1,125 @@
-# ShopDeploy Kubernetes Deployment
+# ☸️ ShopDeploy Kubernetes Deployment
 
-This directory contains Kubernetes manifests for deploying the ShopDeploy application.
+<p align="center">
+  <img src="https://img.shields.io/badge/Kubernetes-1.29-326CE5?style=for-the-badge&logo=kubernetes" alt="Kubernetes"/>
+  <img src="https://img.shields.io/badge/AWS_EKS-Managed-FF9900?style=for-the-badge&logo=amazon-aws" alt="EKS"/>
+  <img src="https://img.shields.io/badge/Kustomize-Ready-326CE5?style=for-the-badge" alt="Kustomize"/>
+</p>
 
-## Prerequisites
+This directory contains Kubernetes manifests for deploying the ShopDeploy application to any Kubernetes cluster (EKS, GKE, AKS, minikube, etc.).
 
-- Kubernetes cluster (minikube, Docker Desktop, EKS, GKE, AKS, etc.)
-- kubectl configured to connect to your cluster
-- Docker images built and pushed to a registry
+---
 
-## Quick Start
+## 📋 Table of Contents
 
-### 1. Build and Push Docker Images
+- [Prerequisites](#-prerequisites)
+- [Architecture](#-architecture)
+- [Quick Start](#-quick-start)
+- [Directory Structure](#-directory-structure)
+- [Configuration](#-configuration)
+- [Deployment Methods](#-deployment-methods)
+- [Useful Commands](#-useful-commands)
+- [Scaling](#-scaling)
+- [Local Development](#-local-development)
+- [Production Considerations](#-production-considerations)
+- [Troubleshooting](#-troubleshooting)
+
+---
+
+## 📋 Prerequisites
+
+- **Kubernetes cluster** (minikube, Docker Desktop, EKS, GKE, AKS)
+- **kubectl** configured to connect to your cluster
+- **Docker images** built and pushed to a registry
+
+```bash
+# Verify kubectl connection
+kubectl cluster-info
+kubectl get nodes
+```
+
+---
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         Kubernetes Cluster                              │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│   ┌─────────────────────────────────────────────────────────────────┐   │
+│   │                    shopdeploy namespace                         │   │
+│   │                                                                 │   │
+│   │   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐        │   │
+│   │   │   Ingress   │───▶│  Frontend   │    │   Backend   │        │   │
+│   │   │  (ALB/Nginx)│    │   Service   │    │   Service   │        │   │
+│   │   └─────────────┘    └──────┬──────┘    └──────┬──────┘        │   │
+│   │                             │                  │               │   │
+│   │                      ┌──────┴──────┐    ┌──────┴──────┐        │   │
+│   │                      │  Frontend   │    │   Backend   │        │   │
+│   │                      │ Deployment  │    │ Deployment  │        │   │
+│   │                      │ (3 replicas)│    │ (3 replicas)│        │   │
+│   │                      └─────────────┘    └──────┬──────┘        │   │
+│   │                                                │               │   │
+│   │                                         ┌──────┴──────┐        │   │
+│   │                                         │   MongoDB   │        │   │
+│   │                                         │ StatefulSet │        │   │
+│   │                                         └─────────────┘        │   │
+│   │                                                                 │   │
+│   │   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐        │   │
+│   │   │  ConfigMap  │    │   Secrets   │    │     HPA     │        │   │
+│   │   │  (Backend)  │    │ (Credentials)│   │ (Auto-scale)│        │   │
+│   │   └─────────────┘    └─────────────┘    └─────────────┘        │   │
+│   │                                                                 │   │
+│   └─────────────────────────────────────────────────────────────────┘   │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🚀 Quick Start
+
+### Step 1: Build and Push Docker Images
 
 ```bash
 # Build images
 docker build -t shopdeploy-backend:latest ./shopdeploy-backend
 docker build -t shopdeploy-frontend:latest ./shopdeploy-frontend
 
-# Tag for your registry (example with Docker Hub)
-docker tag shopdeploy-backend:latest yourusername/shopdeploy-backend:latest
-docker tag shopdeploy-frontend:latest yourusername/shopdeploy-frontend:latest
+# Tag for ECR (or your registry)
+docker tag shopdeploy-backend:latest <ECR_URL>/shopdeploy-backend:latest
+docker tag shopdeploy-frontend:latest <ECR_URL>/shopdeploy-frontend:latest
 
 # Push to registry
-docker push yourusername/shopdeploy-backend:latest
-docker push yourusername/shopdeploy-frontend:latest
+docker push <ECR_URL>/shopdeploy-backend:latest
+docker push <ECR_URL>/shopdeploy-frontend:latest
 ```
 
-### 2. Update Image References
+### Step 2: Update Image References
 
 Update the image names in deployment files:
-- `backend-deployment.yaml`
-- `frontend-deployment.yaml`
+- [backend-deployment.yaml](backend-deployment.yaml)
+- [frontend-deployment.yaml](frontend-deployment.yaml)
 
-### 3. Configure Secrets
+### Step 3: Configure Secrets
 
 Edit `backend-secret.yaml` with your actual values:
 
 ```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backend-secrets
+  namespace: shopdeploy
+type: Opaque
 stringData:
-  MONGODB_URI: "your-mongodb-connection-string"
-  JWT_ACCESS_SECRET: "your-secure-secret"
-  JWT_REFRESH_SECRET: "your-secure-secret"
+  MONGODB_URI: "mongodb://mongo-service:27017/shopdeploy"
+  JWT_ACCESS_SECRET: "your-super-secure-access-secret-min-32-chars"
+  JWT_REFRESH_SECRET: "your-super-secure-refresh-secret-min-32-chars"
 ```
 
-**For production**, create secrets using kubectl:
+**⚠️ For production**, create secrets using kubectl (don't commit to Git):
 
 ```bash
 kubectl create secret generic backend-secrets \
@@ -53,7 +129,7 @@ kubectl create secret generic backend-secrets \
   --from-literal=JWT_REFRESH_SECRET='your-secret'
 ```
 
-### 4. Deploy to Kubernetes
+### Step 4: Deploy to Kubernetes
 
 **Using Kustomize (Recommended):**
 
@@ -75,38 +151,116 @@ kubectl apply -f k8s/namespace.yaml
 kubectl apply -f k8s/
 ```
 
-## Directory Structure
+### Step 5: Verify Deployment
+
+```bash
+# Check all resources
+kubectl get all -n shopdeploy
+
+# Check pods are running
+kubectl get pods -n shopdeploy
+
+# Check services
+kubectl get svc -n shopdeploy
+```
+
+---
+
+## 📁 Directory Structure
 
 ```
 k8s/
-├── namespace.yaml           # Kubernetes namespace
-├── backend-configmap.yaml   # Backend configuration
-├── backend-secret.yaml      # Backend secrets (edit before use!)
-├── backend-deployment.yaml  # Backend deployment
-├── backend-service.yaml     # Backend service
+├── namespace.yaml           # Kubernetes namespace (shopdeploy)
+├── backend-configmap.yaml   # Backend environment configuration
+├── backend-secret.yaml      # Backend sensitive data (⚠️ edit before use!)
+├── backend-deployment.yaml  # Backend deployment (3 replicas)
+├── backend-service.yaml     # Backend ClusterIP service
 ├── frontend-configmap.yaml  # Frontend configuration
-├── frontend-deployment.yaml # Frontend deployment
-├── frontend-service.yaml    # Frontend service
+├── frontend-deployment.yaml # Frontend deployment (3 replicas)
+├── frontend-service.yaml    # Frontend LoadBalancer/ClusterIP service
 ├── mongodb-statefulset.yaml # MongoDB StatefulSet with PVC
-├── ingress.yaml             # Ingress configuration
+├── ingress.yaml             # Ingress configuration (ALB/Nginx)
 ├── hpa.yaml                 # Horizontal Pod Autoscaler
-└── kustomization.yaml       # Kustomize configuration
+├── kustomization.yaml       # Kustomize configuration
+└── README.md                # This file
 ```
 
-## Useful Commands
+---
+
+## ⚙️ Configuration
+
+### ConfigMaps
+
+| ConfigMap | Purpose |
+|-----------|---------|
+| `backend-config` | Backend environment variables (non-sensitive) |
+| `frontend-config` | Frontend Nginx configuration |
+
+### Secrets
+
+| Secret | Contains |
+|--------|----------|
+| `backend-secrets` | MongoDB URI, JWT secrets, Stripe keys |
+
+### Resource Limits
+
+Default resource configuration:
+
+| Component | CPU Request | CPU Limit | Memory Request | Memory Limit |
+|-----------|-------------|-----------|----------------|--------------|
+| Backend | 100m | 500m | 128Mi | 512Mi |
+| Frontend | 50m | 200m | 64Mi | 256Mi |
+| MongoDB | 200m | 1000m | 256Mi | 1Gi |
+
+---
+
+## 🔄 Deployment Methods
+
+### Method 1: Kustomize (Recommended)
+
+```bash
+# Development
+kubectl apply -k k8s/overlays/dev
+
+# Staging
+kubectl apply -k k8s/overlays/staging
+
+# Production
+kubectl apply -k k8s/overlays/prod
+```
+
+### Method 2: Plain kubectl
+
+```bash
+kubectl apply -f k8s/
+```
+
+### Method 3: Helm Charts
+
+See [helm/](../helm/) directory for Helm-based deployments.
+
+---
+
+## 🛠️ Useful Commands
+
+### View Resources
 
 ```bash
 # Check deployment status
 kubectl get all -n shopdeploy
 
-# View pods
-kubectl get pods -n shopdeploy
+# View pods (watch mode)
+kubectl get pods -n shopdeploy -w
 
 # View logs
 kubectl logs -f deployment/backend -n shopdeploy
 kubectl logs -f deployment/frontend -n shopdeploy
+```
 
-# Describe resources
+### Debugging
+
+```bash
+# Describe resources (shows events, errors)
 kubectl describe deployment backend -n shopdeploy
 kubectl describe pod <pod-name> -n shopdeploy
 
@@ -114,19 +268,42 @@ kubectl describe pod <pod-name> -n shopdeploy
 kubectl port-forward svc/backend-service 5000:5000 -n shopdeploy
 kubectl port-forward svc/frontend-service 3000:80 -n shopdeploy
 
-# Scale deployments
-kubectl scale deployment backend --replicas=3 -n shopdeploy
+# Execute commands in pod
+kubectl exec -it deployment/backend -n shopdeploy -- /bin/sh
+```
+
+### Scaling & Updates
+
+```bash
+# Manual scaling
+kubectl scale deployment backend --replicas=5 -n shopdeploy
 
 # Check HPA status
 kubectl get hpa -n shopdeploy
 
+# Update image
+kubectl set image deployment/backend backend=<ECR_URL>/shopdeploy-backend:v2 -n shopdeploy
+
+# Check rollout status
+kubectl rollout status deployment/backend -n shopdeploy
+
+# Rollback
+kubectl rollout undo deployment/backend -n shopdeploy
+```
+
+### Cleanup
+
+```bash
 # Delete all resources
 kubectl delete -k k8s/
-# OR
+
+# Or delete namespace
 kubectl delete namespace shopdeploy
 ```
 
-## Local Development with Minikube
+---
+
+## 💻 Local Development with Minikube
 
 ```bash
 # Start minikube
@@ -155,25 +332,39 @@ minikube ip
 # http://shopdeploy.local
 ```
 
-## Production Considerations
+---
 
-1. **Secrets Management**: Use external secret managers (AWS Secrets Manager, HashiCorp Vault)
-2. **TLS/SSL**: Enable TLS in ingress with cert-manager
-3. **Resource Limits**: Adjust CPU/memory limits based on actual usage
-4. **MongoDB**: Use managed MongoDB (Atlas) instead of in-cluster for production
-5. **Monitoring**: Add Prometheus/Grafana for monitoring
-6. **Logging**: Configure centralized logging (ELK, Loki)
+## 🏭 Production Considerations
 
-## Troubleshooting
+| Consideration | Recommendation |
+|---------------|----------------|
+| **Secrets Management** | Use AWS Secrets Manager or HashiCorp Vault |
+| **TLS/SSL** | Enable TLS in ingress with cert-manager |
+| **Resource Limits** | Adjust CPU/memory based on actual usage |
+| **MongoDB** | Use managed MongoDB (Atlas) instead of in-cluster |
+| **Monitoring** | Add Prometheus/Grafana for monitoring |
+| **Logging** | Configure centralized logging (ELK, Loki) |
+| **Backup** | Set up regular MongoDB backups |
+| **Network Policies** | Implement network policies for pod isolation |
 
-### Pods not starting
+---
+
+## 🔧 Troubleshooting
+
+### Pods Not Starting
 
 ```bash
+# Check pod events
 kubectl describe pod <pod-name> -n shopdeploy
+
+# Check logs
 kubectl logs <pod-name> -n shopdeploy
+
+# Check previous container logs (if restarting)
+kubectl logs <pod-name> -n shopdeploy --previous
 ```
 
-### MongoDB connection issues
+### MongoDB Connection Issues
 
 ```bash
 # Check MongoDB pod
@@ -181,11 +372,10 @@ kubectl logs statefulset/mongodb -n shopdeploy
 
 # Test connection from backend pod
 kubectl exec -it deployment/backend -n shopdeploy -- sh
-# Inside pod: 
-# curl mongo-service:27017
+# Inside pod: nc -zv mongo-service 27017
 ```
 
-### Ingress not working
+### Ingress Not Working
 
 ```bash
 # Check ingress controller
@@ -193,4 +383,28 @@ kubectl get pods -n ingress-nginx
 
 # Check ingress status
 kubectl describe ingress shopdeploy-ingress -n shopdeploy
+
+# Check ingress logs
+kubectl logs -n ingress-nginx deployment/ingress-nginx-controller
 ```
+
+### Image Pull Errors
+
+```bash
+# Check if secret exists for private registry
+kubectl get secrets -n shopdeploy
+
+# Create ECR pull secret (if using ECR)
+kubectl create secret docker-registry ecr-secret \
+  --docker-server=<ECR_URL> \
+  --docker-username=AWS \
+  --docker-password=$(aws ecr get-login-password) \
+  -n shopdeploy
+```
+
+---
+
+<p align="center">
+  <b>Part of the ShopDeploy E-Commerce Platform</b><br>
+  See <a href="../terraform/README.md">Terraform README</a> for infrastructure setup
+</p>
