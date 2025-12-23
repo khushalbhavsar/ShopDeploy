@@ -478,7 +478,7 @@ pipeline {
                     
                     echo """
                     ╔═══════════════════════════════════════════════════════════════╗
-                    ║            ⚠️  PRODUCTION DEPLOYMENT REQUEST ⚠️               ║
+                    ║            ⚠️  PRODUCTION DEPLOYMENT REQUEST ⚠️              ║
                     ╠═══════════════════════════════════════════════════════════════╣
                     ║  Build Number: ${BUILD_NUMBER}
                     ║  Image Tag: ${IMAGE_TAG}
