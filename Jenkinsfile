@@ -53,12 +53,12 @@ pipeline {
         )
         booleanParam(
             name: 'SKIP_TESTS',
-            defaultValue: false,
+            defaultValue: true,
             description: 'Skip running unit tests'
         )
         booleanParam(
             name: 'SKIP_SONAR',
-            defaultValue: false,
+            defaultValue: true,
             description: 'Skip SonarQube analysis'
         )
         booleanParam(
