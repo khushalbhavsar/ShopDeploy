@@ -130,11 +130,98 @@ For private repositories:
 - **Username**: Your GitHub username
 - **Password**: GitHub Personal Access Token (PAT)
 
-### 3. Slack Webhook (Optional)
+### 3. SonarQube Credentials
+
+#### Install SonarQube (Docker)
+
+```bash
+# Run SonarQube container on your server
+docker run -d --name sonarqube \
+  -p 9000:9000 \
+  -v sonarqube_data:/opt/sonarqube/data \
+  -v sonarqube_logs:/opt/sonarqube/logs \
+  sonarqube:lts-community
+```
+
+Access SonarQube at `http://<EC2-IP>:9000` (default login: `admin` / `admin`)
+
+#### Generate SonarQube Token
+
+1. Login to SonarQube → **My Account** → **Security**
+2. Generate Token: Name it `jenkins-token`
+3. Copy the token
+
+#### Add SonarQube Credential in Jenkins
+
+Navigate to: **Manage Jenkins → Credentials → System → Global credentials**
+
+- **Kind**: Secret text
+- **ID**: `sonarqube-token`
+- **Secret**: `<paste-your-sonarqube-token>`
+- **Description**: SonarQube Authentication Token
+
+#### Configure SonarQube Server
+
+Navigate to: **Manage Jenkins → System → SonarQube servers**
+
+Click **Add SonarQube**:
+- **Name**: `SonarQube` *(must match exactly - this name is used in Jenkinsfile)*
+- **Server URL**: `http://<SONARQUBE-IP>:9000`
+- **Server authentication token**: Select `sonarqube-token`
+
+#### Install SonarQube Scanner Tool
+
+Navigate to: **Manage Jenkins → Tools → SonarQube Scanner installations**
+
+Click **Add SonarQube Scanner**:
+- **Name**: `SonarScanner`
+- ✅ Install automatically
+- **Version**: Latest
+
+### 4. Docker Hub Credentials (Optional)
+
+If pushing images to Docker Hub instead of AWS ECR:
+
+Navigate to: **Manage Jenkins → Credentials → System → Global credentials**
+
+- **Kind**: Username with password
+- **ID**: `docker-hub-credentials`
+- **Username**: Your Docker Hub username
+- **Password**: Docker Hub password or Access Token
+- **Description**: Docker Hub Credentials
+
+### 5. Slack Webhook (Optional)
 
 - **Kind**: Secret text
 - **ID**: `slack-webhook`
 - **Secret**: Slack Incoming Webhook URL
+
+### Credentials Summary
+
+| Credential ID | Kind | Purpose |
+|---------------|------|---------|
+| `aws-credentials` | AWS Credentials | ECR login, EKS access, AWS CLI |
+| `aws-account-id` | Secret text | AWS Account ID for ECR URL |
+| `github-credentials` | Username/Password | Git repository access |
+| `sonarqube-token` | Secret text | SonarQube authentication |
+| `docker-hub-credentials` | Username/Password | Docker Hub (optional) |
+| `slack-webhook` | Secret text | Slack notifications (optional) |
+
+### Verify Credentials
+
+```bash
+# Test Docker access on Jenkins server
+sudo -u jenkins docker ps
+
+# Test AWS ECR login
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
+
+# Test SonarQube connectivity
+curl -u admin:admin http://<SONARQUBE-IP>:9000/api/system/status
+
+# Test GitHub access
+git ls-remote https://github.com/your-org/shopdeploy.git
+```
 
 ---
 
