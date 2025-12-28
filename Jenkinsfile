@@ -28,6 +28,9 @@ pipeline {
 
         // Node.js Version
         NODEJS_VERSION = '18'
+        
+        // Deployment Environment (from parameter, defaults to 'dev')
+        DEPLOY_ENV = 'dev'
     }
 
     tools {
@@ -72,7 +75,7 @@ pipeline {
 
     triggers {
         githubPush()
-        pollSCM('H/5 * * * *')
+        // pollSCM('H/5 * * * *')  // Disabled - enable after fixing disk space
     }
 
     stages {
@@ -441,6 +444,9 @@ pipeline {
             when {
                 expression { params.ENVIRONMENT != 'prod' }
             }
+            environment {
+                DEPLOY_ENV = "${params.ENVIRONMENT}"
+            }
             steps {
                 echo "🚀 Deploying to ${params.ENVIRONMENT} environment..."
                 withCredentials([[
@@ -480,10 +486,10 @@ pipeline {
                         echo "📦 Deploying backend..."
                         helm upgrade --install shopdeploy-backend ./helm/backend \
                             --namespace ${K8S_NAMESPACE} \
-                            --values ./helm/backend/values-${ENVIRONMENT}.yaml \
+                            --values ./helm/backend/values-${DEPLOY_ENV}.yaml \
                             --set image.repository=${ECR_REGISTRY}/${ECR_BACKEND_REPO} \
                             --set image.tag=${IMAGE_TAG} \
-                            --set global.environment=${ENVIRONMENT} \
+                            --set global.environment=${DEPLOY_ENV} \
                             --wait \
                             --timeout 10m
                         
@@ -491,14 +497,14 @@ pipeline {
                         echo "🎨 Deploying frontend..."
                         helm upgrade --install shopdeploy-frontend ./helm/frontend \
                             --namespace ${K8S_NAMESPACE} \
-                            --values ./helm/frontend/values-${ENVIRONMENT}.yaml \
+                            --values ./helm/frontend/values-${DEPLOY_ENV}.yaml \
                             --set image.repository=${ECR_REGISTRY}/${ECR_FRONTEND_REPO} \
                             --set image.tag=${IMAGE_TAG} \
-                            --set global.environment=${ENVIRONMENT} \
+                            --set global.environment=${DEPLOY_ENV} \
                             --wait \
                             --timeout 10m
                         
-                        echo "✅ Deployment to ${ENVIRONMENT} completed"
+                        echo "✅ Deployment to ${DEPLOY_ENV} completed"
                     '''
                 }
             }
