@@ -40,7 +40,7 @@ Production-ready E-Commerce REST API built with Node.js, Express, and MongoDB. F
 | 📋 **Orders** | Complete checkout flow |
 | 💳 **Payments** | Stripe integration |
 | 📁 **File Upload** | Local storage for images |
-| ❤️ **Health Checks** | Liveness & readiness endpoints |
+| ❤️ **Health Checks** | `/api/health/health` (liveness) & `/api/health/ready` (readiness) |
 
 ---
 
@@ -152,12 +152,18 @@ The server will start at `http://localhost:5000`
 ### Health Check
 
 ```bash
-# Liveness probe
+# Liveness probe - checks if server is running
 curl http://localhost:5000/api/health/health
+# Response: { "status": "OK", "timestamp": "...", "uptime": 123.45, "environment": "development" }
 
-# Readiness probe
+# Readiness probe - checks if server is ready to accept traffic
 curl http://localhost:5000/api/health/ready
+# Response: { "status": "ready", "timestamp": "..." }
 ```
+
+These endpoints are used by Kubernetes for:
+- **Liveness Probe**: Restart container if unhealthy
+- **Readiness Probe**: Remove from load balancer if not ready
 
 ---
 
@@ -298,22 +304,44 @@ curl -X GET http://localhost:5000/api/auth/me \
 ```
 shopdeploy-backend/
 ├── src/
-│   ├── config/          # Configuration (database, env)
-│   ├── controllers/     # Request handlers
-│   ├── middleware/      # Auth, error handling, validation
-│   ├── models/          # Mongoose schemas
-│   ├── routes/          # API route definitions
-│   ├── services/        # Business logic layer
-│   ├── utils/           # Helper functions
-│   ├── app.js           # Express app configuration
-│   └── server.js        # Server entry point
+│   ├── app.js               # Express app configuration
+│   ├── server.js            # Server entry point (port 5000)
+│   ├── config/
+│   │   └── db.js            # MongoDB connection
+│   ├── controllers/
+│   │   ├── authController.js     # Authentication logic
+│   │   ├── productController.js  # Product CRUD
+│   │   ├── categoryController.js # Category CRUD
+│   │   ├── cartController.js     # Cart operations
+│   │   └── orderController.js    # Order management
+│   ├── middleware/
+│   │   ├── auth.js          # JWT authentication
+│   │   ├── admin.js         # Admin role check
+│   │   └── errorHandler.js  # Error handling
+│   ├── models/
+│   │   ├── User.js          # User schema (auth, roles)
+│   │   ├── Product.js       # Product schema
+│   │   ├── Category.js      # Category schema
+│   │   ├── Cart.js          # Shopping cart schema
+│   │   └── Order.js         # Order schema
+│   ├── routes/
+│   │   ├── authRoutes.js    # /api/auth/*
+│   │   ├── productRoutes.js # /api/products/*
+│   │   ├── categoryRoutes.js # /api/categories/*
+│   │   ├── cartRoutes.js    # /api/cart/*
+│   │   ├── orderRoutes.js   # /api/orders/*
+│   │   └── healthRoutes.js  # /api/health/* (liveness/readiness)
+│   ├── services/            # Business logic layer
+│   ├── scripts/             # Database seed scripts
+│   └── utils/               # Helper functions
 ├── scripts/
-│   ├── build-and-push.sh    # Docker build script (Linux)
-│   └── build-and-push.ps1   # Docker build script (Windows)
-├── uploads/             # Local file uploads
-├── Dockerfile           # Container configuration
-├── .env.example         # Environment template
-└── package.json         # Dependencies & scripts
+│   ├── build-and-push.sh    # Docker build (Linux)
+│   └── build-and-push.ps1   # Docker build (Windows)
+├── Dockerfile               # Multi-stage Docker image
+├── .env.example             # Environment template
+├── .dockerignore            # Docker ignore rules
+├── README.md                # This file
+└── package.json             # Dependencies & scripts
 ```
 
 ---
@@ -360,6 +388,45 @@ curl http://localhost:5000/api/products
 | `npm run dev` | Start development server (nodemon) |
 | `npm test` | Run tests |
 | `npm run lint` | Run ESLint |
+
+---
+
+## 🔄 CI/CD Pipeline
+
+The backend is automatically built and deployed via Jenkins:
+
+| Stage | Description |
+|-------|-------------|
+| **Install Dependencies** | `npm ci` with caching |
+| **Linting** | Code quality checks |
+| **Unit Tests** | Jest with coverage |
+| **Docker Build** | Multi-stage Dockerfile |
+| **Security Scan** | Trivy vulnerability scan |
+| **Push to ECR** | AWS ECR registry |
+| **Helm Deploy** | Kubernetes deployment |
+
+### Kubernetes Deployment
+
+```bash
+# Automatic via Jenkins (recommended)
+# Push to GitHub → Jenkins deploys to EKS
+
+# Manual Helm deployment
+helm upgrade --install shopdeploy-backend ./helm/backend \
+  --namespace shopdeploy \
+  --set image.repository=<ECR_URL>/shopdeploy-prod-backend \
+  --set image.tag=latest
+
+# Check pod status
+kubectl get pods -n shopdeploy -l app=shopdeploy-backend
+```
+
+### Health Probes (Kubernetes)
+
+| Probe | Endpoint | Purpose |
+|-------|----------|----------|
+| Liveness | `/api/health/health` | Restart if unhealthy |
+| Readiness | `/api/health/ready` | Remove from LB if not ready |
 
 ---
 

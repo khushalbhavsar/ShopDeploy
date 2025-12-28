@@ -125,74 +125,138 @@
 ShopDeploy/
 ├── 📂 shopdeploy-backend/          # Backend API (Node.js/Express)
 │   ├── src/
-│   │   ├── config/                 # Configuration files
+│   │   ├── app.js                  # Express app configuration
+│   │   ├── server.js               # Server entry point
+│   │   ├── config/                 # Database & environment config
 │   │   ├── controllers/            # Route controllers
-│   │   ├── middleware/             # Express middleware
-│   │   ├── models/                 # Mongoose models
-│   │   ├── routes/                 # API routes
-│   │   ├── services/               # Business logic
-│   │   └── utils/                  # Utility functions
-│   ├── Dockerfile                  # Backend Docker image
+│   │   ├── middleware/             # Auth, error handling, validation
+│   │   ├── models/                 # Mongoose schemas
+│   │   ├── routes/                 # API routes (including health)
+│   │   ├── services/               # Business logic layer
+│   │   ├── scripts/                # Database scripts
+│   │   └── utils/                  # Helper functions
+│   ├── scripts/
+│   │   ├── build-and-push.sh       # Docker build (Linux)
+│   │   └── build-and-push.ps1      # Docker build (Windows)
+│   ├── Dockerfile                  # Multi-stage Docker image
+│   ├── .env.example                # Environment template
+│   ├── README.md                   # Backend documentation
 │   └── package.json
 │
 ├── 📂 shopdeploy-frontend/         # Frontend (React/Vite)
 │   ├── src/
-│   │   ├── api/                    # API client functions
-│   │   ├── app/                    # Redux store
-│   │   ├── components/             # Reusable components
-│   │   ├── features/               # Redux slices
-│   │   ├── layouts/                # Layout components
+│   │   ├── App.jsx                 # Main React component
+│   │   ├── main.jsx                # App entry point
+│   │   ├── index.css               # Global styles
+│   │   ├── api/                    # Axios API clients
+│   │   ├── app/                    # Redux store configuration
+│   │   ├── components/             # Reusable UI components
+│   │   ├── features/               # Redux slices (auth, cart, product)
+│   │   ├── layouts/                # Page layouts
 │   │   ├── pages/                  # Page components
 │   │   ├── routes/                 # Route definitions
 │   │   └── utils/                  # Helper functions
-│   ├── Dockerfile                  # Frontend Docker image
+│   ├── scripts/
+│   │   ├── deploy-frontend.sh      # Deploy script (Linux)
+│   │   └── deploy-frontend.ps1     # Deploy script (Windows)
+│   ├── Dockerfile                  # Multi-stage Docker image (Nginx)
+│   ├── nginx.conf                  # Nginx configuration
+│   ├── vite.config.js              # Vite build configuration
+│   ├── tailwind.config.js          # Tailwind CSS configuration
+│   ├── .eslintrc.cjs               # ESLint configuration
+│   ├── README.md                   # Frontend documentation
 │   └── package.json
 │
-├── 📂 terraform/                   # Infrastructure as Code
-│   ├── main.tf                     # Main Terraform config
-│   ├── variables.tf                # Input variables
+├── 📂 terraform/                   # Infrastructure as Code (AWS)
+│   ├── main.tf                     # Main Terraform configuration
+│   ├── variables.tf                # Input variable definitions
 │   ├── outputs.tf                  # Output values
+│   ├── data.tf                     # Data sources
+│   ├── terraform.tfvars.example    # Example variables
+│   ├── Makefile                    # Terraform shortcuts
 │   ├── README.md                   # Terraform documentation
-│   └── modules/                    # Terraform modules
-│       ├── vpc/                    # VPC configuration
+│   ├── backend-setup/              # S3 backend configuration
+│   ├── environments/               # Environment-specific configs
+│   └── modules/
+│       ├── vpc/                    # VPC, subnets, NAT gateway
 │       ├── iam/                    # IAM roles & policies
 │       ├── ecr/                    # Container registry
-│       └── eks/                    # Kubernetes cluster
+│       └── eks/                    # EKS cluster & node groups
 │
-├── 📂 helm/                        # Helm Charts
-│   ├── backend/                    # Backend Helm chart
-│   └── frontend/                   # Frontend Helm chart
+├── 📂 helm/                        # Helm Charts for Kubernetes
+│   ├── backend/
+│   │   ├── Chart.yaml              # Chart metadata
+│   │   ├── values.yaml             # Default values
+│   │   ├── values-dev.yaml         # Development overrides
+│   │   ├── values-staging.yaml     # Staging overrides
+│   │   ├── values-prod.yaml        # Production overrides
+│   │   └── templates/              # Kubernetes templates
+│   └── frontend/
+│       ├── Chart.yaml
+│       ├── values.yaml
+│       ├── values-dev.yaml
+│       ├── values-staging.yaml
+│       ├── values-prod.yaml
+│       └── templates/
 │
-├── 📂 k8s/                         # Kubernetes manifests
-│   ├── namespace.yaml
-│   ├── backend-deployment.yaml
-│   ├── frontend-deployment.yaml
-│   ├── ingress.yaml
-│   ├── hpa.yaml
+├── 📂 k8s/                         # Raw Kubernetes manifests
+│   ├── namespace.yaml              # shopdeploy namespace
+│   ├── backend-deployment.yaml     # Backend deployment
+│   ├── backend-service.yaml        # Backend ClusterIP service
+│   ├── backend-configmap.yaml      # Backend configuration
+│   ├── backend-secret.yaml         # Backend secrets (template)
+│   ├── frontend-deployment.yaml    # Frontend deployment
+│   ├── frontend-service.yaml       # Frontend service
+│   ├── frontend-configmap.yaml     # Frontend configuration
+│   ├── mongodb-statefulset.yaml    # MongoDB for development
+│   ├── mongodb-statefulset-prod.yaml # MongoDB for production
+│   ├── ingress.yaml                # Ingress configuration
+│   ├── hpa.yaml                    # Horizontal Pod Autoscaler
+│   ├── pdb.yaml                    # Pod Disruption Budget
+│   ├── network-policy.yaml         # Network policies
+│   ├── resource-quota.yaml         # Resource quotas
+│   ├── kustomization.yaml          # Kustomize configuration
 │   └── README.md                   # K8s documentation
 │
 ├── 📂 docs/                        # Documentation
-│   ├── HELM-SETUP-GUIDE.md
-│   ├── JENKINS-SETUP-GUIDE.md
-│   └── MONITORING-SETUP-GUIDE.md
+│   ├── HELM-SETUP-GUIDE.md         # Helm installation & usage
+│   ├── JENKINS-SETUP-GUIDE.md      # Jenkins CI/CD setup
+│   └── MONITORING-SETUP-GUIDE.md   # Prometheus/Grafana setup
 │
-├── 📂 monitoring/                  # Monitoring configuration
-│   ├── prometheus-values.yaml
-│   ├── grafana-values.yaml
+├── 📂 monitoring/                  # Observability stack
+│   ├── prometheus-values.yaml      # Prometheus Helm values
+│   ├── grafana-values.yaml         # Grafana Helm values
+│   ├── install-monitoring.sh       # Installation script
 │   └── dashboards/
+│       └── shopdeploy-dashboard.json # Custom Grafana dashboard
 │
 ├── 📂 scripts/                     # Automation scripts
-│   ├── ec2-bootstrap.sh            # EC2 instance setup
 │   ├── build.sh                    # Docker build script
-│   ├── deploy.sh                   # Deployment script
-│   ├── helm-deploy.sh              # Helm deployment
-│   ├── install-*.sh                # Tool installation scripts
-│   └── ...
+│   ├── push.sh                     # Docker push script
+│   ├── deploy.sh                   # Kubernetes deployment
+│   ├── rollback.sh                 # Rollback deployment
+│   ├── cleanup.sh                  # Cleanup resources
+│   ├── test.sh                     # Run tests
+│   ├── smoke-test.sh               # Smoke tests
+│   ├── ec2-bootstrap.sh            # EC2 instance setup
+│   ├── helm-deploy.sh              # Helm deployment (Linux)
+│   ├── helm-deploy.ps1             # Helm deployment (Windows)
+│   ├── install-docker.sh           # Install Docker
+│   ├── install-kubectl.sh          # Install kubectl
+│   ├── install-helm.sh             # Install Helm
+│   ├── install-awscli.sh           # Install AWS CLI
+│   ├── install-terraform.sh        # Install Terraform
+│   ├── install-jenkins.sh          # Install Jenkins (Linux)
+│   ├── install-jenkins.ps1         # Install Jenkins (Windows)
+│   ├── install-monitoring.ps1      # Install monitoring (Windows)
+│   ├── terraform-init.sh           # Terraform init
+│   ├── terraform-apply.sh          # Terraform apply
+│   └── terraform-destroy.sh        # Terraform destroy
 │
-├── 📄 Jenkinsfile                  # CI/CD Pipeline
-├── 📄 docker-compose.yml           # Local Docker setup
-├── 📄 DEVOPS-SETUP-GUIDE.md        # DevOps setup guide
-├── 📄 EC2-DEPLOYMENT-GUIDE.md      # EC2 deployment guide
+├── 📄 Jenkinsfile                  # CI/CD Pipeline (16 stages)
+├── 📄 docker-compose.yml           # Local development setup
+├── 📄 .env.example                 # Environment template
+├── 📄 .gitignore                   # Git ignore rules
 └── 📄 README.md                    # This file
 ```
 
@@ -297,9 +361,12 @@ npm run dev
 
 ### Access the Application
 
-- **Frontend**: http://localhost:5173
-- **Backend API**: http://localhost:5000
-- **API Health**: http://localhost:5000/api/health/health
+| Service | URL | Description |
+|---------|-----|-------------|
+| **Frontend** | http://localhost:5173 | React application (Vite dev server) |
+| **Backend API** | http://localhost:5000 | Express REST API |
+| **Health Check** | http://localhost:5000/api/health/health | Liveness probe |
+| **Readiness Check** | http://localhost:5000/api/health/ready | Readiness probe |
 
 ---
 
@@ -443,41 +510,93 @@ terraform destroy
 
 > 📖 For Jenkins setup guide, see [docs/JENKINS-SETUP-GUIDE.md](docs/JENKINS-SETUP-GUIDE.md)
 
-### Pipeline Stages
+### Pipeline Overview
+
+The Jenkins pipeline automates the complete CI/CD workflow with 16 stages:
 
 ```
-┌──────────┐   ┌───────────┐   ┌────────────┐   ┌───────────┐
-│ Checkout │──▶│   Build   │──▶│    Test    │──▶│   Scan    │
-└──────────┘   └───────────┘   └────────────┘   └───────────┘
-                                                      │
-┌──────────┐   ┌───────────┐   ┌────────────┐        │
-│  Smoke   │◀──│  Deploy   │◀──│ Push ECR   │◀───────┘
-│  Tests   │   │   (EKS)   │   │            │
-└──────────┘   └───────────┘   └────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                        ShopDeploy CI/CD Pipeline                             │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   │
+│  │1.Checkout│──▶│2.Detect  │──▶│3.Install │──▶│ 4.Lint   │──▶│ 5.Tests  │   │
+│  │          │   │ Changes  │   │   Deps   │   │          │   │          │   │
+│  └──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘   │
+│                                                                     │        │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐         │        │
+│  │10.Push   │◀──│9.Security│◀──│ 8.Build  │◀──│7.Quality │◀──┬─────┘        │
+│  │  ECR     │   │   Scan   │   │  Docker  │   │   Gate   │   │              │
+│  └────┬─────┘   └──────────┘   └──────────┘   └──────────┘   │              │
+│       │                                                       │              │
+│       │    ┌──────────────────────────────────────────────────┘              │
+│       │    │  6. SonarQube Analysis                                          │
+│       │    └──────────────────────────────────────────────────               │
+│       ▼                                                                      │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   │
+│  │11.Deploy │──▶│12.Prod   │──▶│13.Deploy │──▶│14.Smoke  │──▶│15.Integ. │   │
+│  │Dev/Stage │   │ Approval │   │   Prod   │   │  Tests   │   │  Tests   │   │
+│  └──────────┘   └──────────┘   └──────────┘   └──────────┘   └────┬─────┘   │
+│                                                                    │         │
+│                                               ┌──────────┐         │         │
+│                                               │16.Cleanup│◀────────┘         │
+│                                               └──────────┘                   │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-| Stage | Description |
-|-------|-------------|
-| **Checkout** | Clone repository from GitHub |
-| **Install Dependencies** | Run `npm ci` for backend/frontend |
-| **Code Quality** | SonarQube analysis (optional) |
-| **Unit Tests** | Run Jest tests with coverage |
-| **Docker Build** | Multi-stage Docker builds |
-| **Push to ECR** | Push images to AWS ECR |
-| **Deploy** | Helm deployment to EKS |
-| **Smoke Tests** | Verify deployment health |
+### All 16 Pipeline Stages
+
+| Stage | Name | Description |
+|-------|------|-------------|
+| 1 | **Checkout** | Clone repository from GitHub with commit info |
+| 2 | **Detect Changes** | Identify changes in backend/frontend directories |
+| 3 | **Install Dependencies** | Parallel `npm ci` for backend & frontend |
+| 4 | **Code Linting** | Parallel ESLint checks for both services |
+| 5 | **Unit Tests** | Parallel Jest tests with coverage reports |
+| 6 | **SonarQube Analysis** | Code quality analysis (optional) |
+| 7 | **Quality Gate** | Verify SonarQube quality standards |
+| 8 | **Build Docker Images** | Parallel multi-stage Docker builds |
+| 9 | **Security Scan** | Trivy vulnerability scanning (HIGH/CRITICAL) |
+| 10 | **Push to ECR** | Tag and push images to AWS ECR |
+| 11 | **Deploy Dev/Staging** | Helm deployment to non-prod EKS |
+| 12 | **Production Approval** | Manual approval gate for prod deploys |
+| 13 | **Deploy Production** | Helm deployment to production EKS |
+| 14 | **Smoke Tests** | Verify pod rollout and health checks |
+| 15 | **Integration Tests** | Run integration test suite |
+| 16 | **Cleanup** | Remove local Docker images to save space |
+
+### Pipeline Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `ENVIRONMENT` | Choice | `dev` | Target environment: `dev`, `staging`, `prod` |
+| `SKIP_TESTS` | Boolean | `false` | Skip unit test execution |
+| `SKIP_SONAR` | Boolean | `false` | Skip SonarQube analysis |
+| `FORCE_DEPLOY` | Boolean | `true` | Deploy even without code changes |
+| `RUN_SECURITY_SCAN` | Boolean | `true` | Run Trivy security scanning |
 
 ### Running the Pipeline
 
 ```bash
-# Trigger manually in Jenkins UI
-# Or push to main branch (auto-trigger via webhook)
+# Option 1: Trigger via GitHub webhook (automatic on push)
+# Option 2: Manual trigger in Jenkins UI with parameters
 
-# Build with parameters
-- ENVIRONMENT: dev | staging | prod
-- SKIP_TESTS: false
-- SKIP_SONAR: true (until SonarQube is configured)
+# Example: Deploy to production
+# 1. Go to Jenkins > ShopDeploy > Build with Parameters
+# 2. Select ENVIRONMENT: prod
+# 3. Click Build
+# 4. Approve deployment at Stage 12 (Production Approval)
 ```
+
+### Pipeline Features
+
+- ✅ **Parallel Execution**: Dependencies, linting, tests, and builds run in parallel
+- ✅ **Environment-Specific Configs**: Separate Helm values for dev/staging/prod
+- ✅ **Automatic Tool Installation**: kubectl, Helm, Trivy installed automatically
+- ✅ **Security Scanning**: Trivy scans for HIGH/CRITICAL vulnerabilities
+- ✅ **Health Verification**: Smoke tests verify pod rollout status
+- ✅ **Cleanup**: Automatic Docker image cleanup to save disk space
 
 ---
 
@@ -567,10 +686,10 @@ kubectl port-forward svc/prometheus-server 9090:80 -n monitoring
 
 ### Health Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/health/health` | Liveness check |
-| GET | `/api/health/ready` | Readiness check |
+| Method | Endpoint | Description | Response |
+|--------|----------|-------------|----------|
+| GET | `/api/health/health` | Liveness check | `{ status: "OK", timestamp, uptime, environment }` |
+| GET | `/api/health/ready` | Readiness check | `{ status: "ready", timestamp }` |
 
 ---
 

@@ -158,6 +158,31 @@ The Docker image uses Nginx to serve the built React application with:
 - Security headers
 - Optimized caching for static assets
 
+### Kubernetes Health Probes
+
+When deployed to Kubernetes, the frontend uses:
+
+| Probe Type | Path | Port | Purpose |
+|------------|------|------|----------|
+| **Liveness** | `/` | 80 | Check if Nginx is responding |
+| **Readiness** | `/` | 80 | Verify container is ready for traffic |
+
+---
+
+## 🔄 CI/CD Pipeline
+
+The frontend is built and deployed as part of the Jenkins pipeline:
+
+| Stage | Description |
+|-------|-------------|
+| **Install Dependencies** | `npm ci` with caching |
+| **Linting** | ESLint checks |
+| **Unit Tests** | Jest with coverage |
+| **Docker Build** | Multi-stage Dockerfile |
+| **Security Scan** | Trivy vulnerability scan |
+| **Push to ECR** | AWS ECR registry |
+| **Helm Deploy** | Kubernetes deployment |
+
 --- 
 
 ## 📁 Project Structure
@@ -165,35 +190,52 @@ The Docker image uses Nginx to serve the built React application with:
 ```
 shopdeploy-frontend/
 ├── src/
-│   ├── api/              # API service functions (Axios)
-│   ├── app/              # Redux store configuration
-│   ├── components/       # Reusable UI components
-│   │   ├── common/       # Buttons, inputs, cards
-│   │   ├── layout/       # Header, footer, sidebar
-│   │   └── product/      # Product-specific components
-│   ├── features/         # Redux slices
-│   │   ├── auth/         # Authentication state
-│   │   ├── cart/         # Shopping cart state
-│   │   └── product/      # Product state
-│   ├── layouts/          # Page layout components
-│   ├── pages/            # Page components
-│   │   ├── admin/        # Admin dashboard pages
-│   │   ├── auth/         # Login, register pages
-│   │   └── shop/         # Product, cart, checkout pages
-│   ├── routes/           # Route configuration
-│   ├── utils/            # Helper functions
-│   ├── App.jsx           # Main app component
-│   ├── index.css         # Global styles
-│   └── main.jsx          # App entry point
-├── public/               # Static assets
+│   ├── App.jsx               # Main React component
+│   ├── main.jsx              # App entry point
+│   ├── index.css             # Global Tailwind styles
+│   ├── api/                  # Axios API clients
+│   │   └── axios.js          # Configured Axios instance
+│   ├── app/                  # Redux store configuration
+│   │   └── store.js          # Redux store setup
+│   ├── components/           # Reusable UI components
+│   │   ├── Navbar.jsx        # Navigation bar
+│   │   ├── Footer.jsx        # Footer component
+│   │   ├── ProductCard.jsx   # Product card component
+│   │   ├── ProtectedRoute.jsx # Auth route wrapper
+│   │   └── AdminRoute.jsx    # Admin route wrapper
+│   ├── features/             # Redux slices
+│   │   ├── auth/             # Authentication state
+│   │   ├── cart/             # Shopping cart state
+│   │   ├── products/         # Product state
+│   │   └── orders/           # Order state
+│   ├── layouts/              # Page layout wrappers
+│   ├── pages/                # Page components
+│   │   ├── Home.jsx          # Landing page
+│   │   ├── Products.jsx      # Product listing
+│   │   ├── ProductDetails.jsx # Single product view
+│   │   ├── Cart.jsx          # Shopping cart
+│   │   ├── Checkout.jsx      # Checkout flow
+│   │   ├── Orders.jsx        # Order history
+│   │   ├── OrderDetails.jsx  # Single order view
+│   │   ├── Profile.jsx       # User profile
+│   │   ├── auth/             # Login, Register pages
+│   │   └── admin/            # Admin dashboard pages
+│   ├── routes/               # Route definitions
+│   └── utils/                # Helper functions
 ├── scripts/
 │   ├── deploy-frontend.sh    # Deploy script (Linux)
 │   └── deploy-frontend.ps1   # Deploy script (Windows)
-├── Dockerfile            # Container configuration
-├── nginx.conf            # Nginx configuration
-├── vite.config.js        # Vite configuration
-├── tailwind.config.js    # Tailwind configuration
-└── package.json          # Dependencies & scripts
+├── index.html                # HTML template
+├── Dockerfile                # Multi-stage Docker (Nginx)
+├── nginx.conf                # Nginx configuration
+├── vite.config.js            # Vite build configuration
+├── tailwind.config.js        # Tailwind CSS configuration
+├── postcss.config.cjs        # PostCSS configuration
+├── .eslintrc.cjs             # ESLint configuration
+├── .env.example              # Environment template
+├── .dockerignore             # Docker ignore rules
+├── README.md                 # This file
+└── package.json              # Dependencies & scripts
 ```
 
 ---
@@ -313,10 +355,26 @@ npm run build
 ```
 
 The build output will be in the `dist/` directory, ready to deploy to:
+- **AWS EKS** (via Jenkins pipeline)
 - **AWS S3 + CloudFront**
 - **Vercel**
 - **Netlify**
 - **Nginx (Docker)**
+
+### Deploy to EKS (via Jenkins)
+
+```bash
+# Automatic deployment via Jenkins pipeline
+# 1. Push code to GitHub
+# 2. Jenkins automatically builds and deploys
+# 3. Or manually trigger in Jenkins UI
+
+# Manual Helm deployment
+helm upgrade --install shopdeploy-frontend ./helm/frontend \
+  --namespace shopdeploy \
+  --set image.repository=<ECR_URL>/shopdeploy-prod-frontend \
+  --set image.tag=latest
+```
 
 ### Environment-specific Builds
 

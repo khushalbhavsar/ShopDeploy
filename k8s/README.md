@@ -162,7 +162,25 @@ kubectl get pods -n shopdeploy
 
 # Check services
 kubectl get svc -n shopdeploy
+
+# Verify health endpoints (port-forward to test)
+kubectl port-forward svc/shopdeploy-backend 5000:5000 -n shopdeploy
+# Then in another terminal:
+curl http://localhost:5000/api/health/health
+# Expected: { "status": "OK", "timestamp": "...", "uptime": ..., "environment": "..." }
+
+curl http://localhost:5000/api/health/ready
+# Expected: { "status": "ready", "timestamp": "..." }
 ```
+
+### Health Probes Configuration
+
+The backend deployment uses the following Kubernetes probes:
+
+| Probe Type | Endpoint | Purpose |
+|------------|----------|----------|
+| **Liveness** | `/api/health/health` | Restarts pod if unhealthy |
+| **Readiness** | `/api/health/ready` | Removes from service if not ready |
 
 ---
 
@@ -170,19 +188,23 @@ kubectl get svc -n shopdeploy
 
 ```
 k8s/
-├── namespace.yaml           # Kubernetes namespace (shopdeploy)
-├── backend-configmap.yaml   # Backend environment configuration
-├── backend-secret.yaml      # Backend sensitive data (⚠️ edit before use!)
-├── backend-deployment.yaml  # Backend deployment (3 replicas)
-├── backend-service.yaml     # Backend ClusterIP service
-├── frontend-configmap.yaml  # Frontend configuration
-├── frontend-deployment.yaml # Frontend deployment (3 replicas)
-├── frontend-service.yaml    # Frontend LoadBalancer/ClusterIP service
-├── mongodb-statefulset.yaml # MongoDB StatefulSet with PVC
-├── ingress.yaml             # Ingress configuration (ALB/Nginx)
-├── hpa.yaml                 # Horizontal Pod Autoscaler
-├── kustomization.yaml       # Kustomize configuration
-└── README.md                # This file
+├── namespace.yaml              # Kubernetes namespace (shopdeploy)
+├── backend-configmap.yaml      # Backend environment configuration
+├── backend-secret.yaml         # Backend sensitive data (⚠️ edit before use!)
+├── backend-deployment.yaml     # Backend deployment (3 replicas)
+├── backend-service.yaml        # Backend ClusterIP service (port 5000)
+├── frontend-configmap.yaml     # Frontend configuration
+├── frontend-deployment.yaml    # Frontend deployment (3 replicas)
+├── frontend-service.yaml       # Frontend service (port 80)
+├── mongodb-statefulset.yaml    # MongoDB StatefulSet (development)
+├── mongodb-statefulset-prod.yaml # MongoDB StatefulSet (production)
+├── ingress.yaml                # Ingress configuration (ALB/Nginx)
+├── hpa.yaml                    # Horizontal Pod Autoscaler
+├── pdb.yaml                    # Pod Disruption Budget
+├── network-policy.yaml         # Network security policies
+├── resource-quota.yaml         # Namespace resource quotas
+├── kustomization.yaml          # Kustomize configuration
+└── README.md                   # This file
 ```
 
 ---

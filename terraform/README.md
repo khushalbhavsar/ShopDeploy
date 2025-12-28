@@ -273,6 +273,27 @@ aws eks update-kubeconfig --region us-east-1 --name shopdeploy-prod-eks
 
 # Verify connection
 kubectl get nodes
+
+# Check cluster info
+kubectl cluster-info
+```
+
+### Step 6: Deploy Application
+
+After infrastructure is ready, deploy using the Jenkins pipeline:
+
+```bash
+# Option 1: Via Jenkins (Recommended)
+# Push code to GitHub - Jenkins pipeline automatically deploys
+
+# Option 2: Manual Helm deployment
+helm upgrade --install shopdeploy-backend ./helm/backend \
+  --namespace shopdeploy \
+  --values ./helm/backend/values-dev.yaml
+
+helm upgrade --install shopdeploy-frontend ./helm/frontend \
+  --namespace shopdeploy \
+  --values ./helm/frontend/values-dev.yaml
 ```
 
 ---
@@ -284,28 +305,40 @@ terraform/
 ├── main.tf                    # Main configuration, module calls
 ├── variables.tf               # Input variable definitions
 ├── outputs.tf                 # Output value definitions
-├── terraform.tfvars.example   # Example variable values
+├── data.tf                    # Data sources (availability zones, etc.)
+├── terraform.tfvars           # Your variable values (git-ignored)
+├── terraform.tfvars.example   # Example variable values (commit this)
+├── Makefile                   # Shortcuts: make plan, make apply
+├── README.md                  # This documentation
 │
-└── modules/
+├── backend-setup/             # S3 backend for remote state
+│   └── ...                    # State bucket & DynamoDB lock table
+│
+├── environments/              # Environment-specific configurations
+│   ├── dev/
+│   ├── staging/
+│   └── prod/
+│
+└── modules/                   # Reusable Terraform modules
     ├── vpc/                   # VPC networking module
-    │   ├── main.tf
-    │   ├── variables.tf
-    │   └── outputs.tf
+    │   ├── main.tf            # VPC, subnets, NAT, IGW
+    │   ├── variables.tf       # CIDR blocks, AZ config
+    │   └── outputs.tf         # VPC ID, subnet IDs
     │
     ├── iam/                   # IAM roles and policies module
-    │   ├── main.tf
-    │   ├── variables.tf
-    │   └── outputs.tf
+    │   ├── main.tf            # EKS cluster role, node role
+    │   ├── variables.tf       # Role names, policies
+    │   └── outputs.tf         # Role ARNs
     │
     ├── ecr/                   # Container registry module
-    │   ├── main.tf
-    │   ├── variables.tf
-    │   └── outputs.tf
+    │   ├── main.tf            # ECR repos, lifecycle policies
+    │   ├── variables.tf       # Repo names, retention
+    │   └── outputs.tf         # Repository URLs
     │
     └── eks/                   # Kubernetes cluster module
-        ├── main.tf
-        ├── variables.tf
-        └── outputs.tf
+        ├── main.tf            # EKS cluster, node groups, add-ons
+        ├── variables.tf       # Instance types, scaling config
+        └── outputs.tf         # Cluster endpoint, CA data
 ```
 
 ---
@@ -488,6 +521,30 @@ terraform destroy
 # Destroy specific resource
 terraform destroy -target=module.eks
 ```
+
+---
+
+## 🔄 CI/CD Integration
+
+The Terraform-provisioned infrastructure integrates with the Jenkins pipeline:
+
+### Infrastructure → Pipeline Flow
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Terraform  │────▶│     ECR     │────▶│   Jenkins   │────▶│     EKS     │
+│   (IaC)     │     │ Repositories│     │   Pipeline  │     │   Cluster   │
+└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+```
+
+### Resources Used by Jenkins
+
+| Resource | Created By | Used For |
+|----------|------------|----------|
+| EKS Cluster | Terraform | Kubernetes deployments |
+| ECR Repos | Terraform | Docker image storage |
+| IAM Roles | Terraform | EKS authentication |
+| VPC/Subnets | Terraform | Network isolation |
 
 ---
 
