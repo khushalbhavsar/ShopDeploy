@@ -39,7 +39,8 @@ const Register = () => {
     }
 
     try {
-      const { confirmPassword: _confirmPassword, ...registerData } = formData;
+      // eslint-disable-next-line no-unused-vars
+      const { confirmPassword, ...registerData } = formData;
       await dispatch(register(registerData)).unwrap();
       toast.success('Registration successful!');
       navigate('/');

@@ -349,9 +349,11 @@ pipeline {
                     steps {
                         echo '🔒 Scanning backend image for vulnerabilities...'
                         sh '''
-                            # Install trivy if not present
+                            # Install trivy to local bin if not present
+                            export PATH="$WORKSPACE/bin:$PATH"
                             if ! command -v trivy &> /dev/null; then
-                                curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+                                mkdir -p "$WORKSPACE/bin"
+                                curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b "$WORKSPACE/bin"
                             fi
                             
                             trivy image --severity HIGH,CRITICAL --exit-code 0 \
@@ -364,6 +366,7 @@ pipeline {
                     steps {
                         echo '🔒 Scanning frontend image for vulnerabilities...'
                         sh '''
+                            export PATH="$WORKSPACE/bin:$PATH"
                             trivy image --severity HIGH,CRITICAL --exit-code 0 \
                                 --format table shopdeploy-frontend:${IMAGE_TAG} || true
                         '''
