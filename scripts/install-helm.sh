@@ -5,7 +5,8 @@
 # Installs Helm (Kubernetes Package Manager)
 #==============================================================================
 
-set -e
+# Continue on error to complete as much as possible
+set +e
 
 # Color codes for output
 RED='\033[0;31m'

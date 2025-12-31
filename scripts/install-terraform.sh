@@ -5,7 +5,8 @@
 # Also supports Ubuntu/Debian as fallback
 #==============================================================================
 
-set -e
+# Continue on error to complete as much as possible
+set +e
 
 TERRAFORM_VERSION="${1:-1.6.6}"
 

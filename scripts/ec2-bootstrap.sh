@@ -6,7 +6,8 @@
 # Run as: sudo bash ec2-bootstrap.sh
 #==============================================================================
 
-set -e
+# Don't exit on error - we want to continue and report failures at the end
+set +e
 
 echo "=============================================="
 echo "  ShopDeploy EC2 Bootstrap Script"
@@ -85,8 +86,15 @@ log_step "Step 2/8: Installing basic utilities..."
 
 if [[ "$OS" == *"Amazon Linux"* ]]; then
     if [[ "$VER" == "2023" ]] || [[ -f /etc/amazon-linux-release ]]; then
-        sudo dnf install -y git curl wget unzip jq tree htop vim tar gzip \
-            nc telnet bind-utils iputils
+        # Amazon Linux 2023 uses curl-minimal by default which conflicts with curl
+        # We install utilities without curl (curl-minimal is already present and sufficient)
+        sudo dnf install -y git wget unzip jq tree htop vim tar gzip \
+            nc bind-utils iputils || true
+        # Verify curl functionality (curl-minimal provides curl command)
+        if ! command -v curl &> /dev/null; then
+            log_warn "curl not found, attempting to install with --allowerasing..."
+            sudo dnf install -y --allowerasing curl || log_warn "Could not install curl, using curl-minimal"
+        fi
     else
         sudo yum install -y git curl wget unzip jq tree htop vim tar gzip \
             nc telnet bind-utils
