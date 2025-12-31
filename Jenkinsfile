@@ -438,9 +438,6 @@ pipeline {
         // Stage 11: Deploy to Dev/Staging
         //======================================================================
         stage('Deploy to Dev/Staging') {
-            when {
-                expression { params.ENVIRONMENT != 'prod' }
-            }
             environment {
                 DEPLOY_ENV = "${params.ENVIRONMENT}"
             }
@@ -514,9 +511,7 @@ pipeline {
         // Stage 12: Production Approval
         //======================================================================
         stage('Production Approval') {
-            when {
-                expression { params.ENVIRONMENT == 'prod' }
-            }
+
             steps {
                 script {
                     echo '⏳ Waiting for production deployment approval...'
