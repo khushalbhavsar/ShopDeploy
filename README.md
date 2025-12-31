@@ -9,6 +9,7 @@
   <img src="https://img.shields.io/badge/Kubernetes-EKS-326CE5?style=for-the-badge&logo=kubernetes" alt="Kubernetes"/>
   <img src="https://img.shields.io/badge/Terraform-IaC-7B42BC?style=for-the-badge&logo=terraform" alt="Terraform"/>
   <img src="https://img.shields.io/badge/Jenkins-CI%2FCD-D24939?style=for-the-badge&logo=jenkins" alt="Jenkins"/>
+  <img src="https://img.shields.io/badge/Amazon_Linux-2023-FF9900?style=for-the-badge&logo=amazon-aws" alt="Amazon Linux"/>
 </p>
 
 <p align="center">
@@ -24,6 +25,7 @@
 - [Tech Stack](#-tech-stack)
 - [Architecture](#-architecture)
 - [Project Structure](#-project-structure)
+- [Amazon Linux Setup (Quick Start)](#-amazon-linux-setup-quick-start)
 - [Getting Started](#-getting-started)
 - [Local Development](#-local-development)
 - [Docker Deployment](#-docker-deployment)
@@ -219,6 +221,7 @@ ShopDeploy/
 │   └── README.md                   # K8s documentation
 │
 ├── 📂 docs/                        # Documentation
+│   ├── AMAZON-LINUX-COMPLETE-SETUP-GUIDE.md  # Complete EC2 setup guide
 │   ├── HELM-SETUP-GUIDE.md         # Helm installation & usage
 │   ├── JENKINS-SETUP-GUIDE.md      # Jenkins CI/CD setup
 │   └── MONITORING-SETUP-GUIDE.md   # Prometheus/Grafana setup
@@ -231,6 +234,13 @@ ShopDeploy/
 │       └── shopdeploy-dashboard.json # Custom Grafana dashboard
 │
 ├── 📂 scripts/                     # Automation scripts
+│   ├── ec2-bootstrap.sh            # 🚀 Complete EC2 setup (Amazon Linux 2/2023)
+│   ├── install-docker.sh           # Docker + Docker Compose (AL2/AL2023)
+│   ├── install-jenkins.sh          # Jenkins LTS + Java 17 (AL2/AL2023)
+│   ├── install-terraform.sh        # Terraform via HashiCorp repo (AL2/AL2023)
+│   ├── install-kubectl.sh          # kubectl + autocompletion (AL2/AL2023)
+│   ├── install-helm.sh             # Helm 3 + common repos (AL2/AL2023)
+│   ├── install-awscli.sh           # AWS CLI v2 + eksctl (AL2/AL2023)
 │   ├── build.sh                    # Docker build script
 │   ├── push.sh                     # Docker push script
 │   ├── deploy.sh                   # Kubernetes deployment
@@ -238,15 +248,8 @@ ShopDeploy/
 │   ├── cleanup.sh                  # Cleanup resources
 │   ├── test.sh                     # Run tests
 │   ├── smoke-test.sh               # Smoke tests
-│   ├── ec2-bootstrap.sh            # EC2 instance setup
 │   ├── helm-deploy.sh              # Helm deployment (Linux)
 │   ├── helm-deploy.ps1             # Helm deployment (Windows)
-│   ├── install-docker.sh           # Install Docker
-│   ├── install-kubectl.sh          # Install kubectl
-│   ├── install-helm.sh             # Install Helm
-│   ├── install-awscli.sh           # Install AWS CLI
-│   ├── install-terraform.sh        # Install Terraform
-│   ├── install-jenkins.sh          # Install Jenkins (Linux)
 │   ├── install-jenkins.ps1         # Install Jenkins (Windows)
 │   ├── install-monitoring.ps1      # Install monitoring (Windows)
 │   ├── terraform-init.sh           # Terraform init
@@ -304,7 +307,90 @@ ShopDeploy/
 
 ---
 
-## 🚀 Getting Started
+## �️ Amazon Linux Setup (Quick Start)
+
+> 📖 For complete step-by-step guide, see [docs/AMAZON-LINUX-COMPLETE-SETUP-GUIDE.md](docs/AMAZON-LINUX-COMPLETE-SETUP-GUIDE.md)
+
+### Supported Operating Systems
+
+| OS | Version | Status |
+|----|---------|--------|
+| **Amazon Linux** | 2023 | ✅ Fully Supported |
+| **Amazon Linux** | 2 | ✅ Fully Supported |
+| **Ubuntu** | 20.04/22.04 | ✅ Supported |
+| **Debian** | 11/12 | ✅ Supported |
+
+### One-Command Bootstrap (Amazon Linux)
+
+```bash
+# 1. SSH into your EC2 instance
+ssh -i "your-key.pem" ec2-user@<EC2-PUBLIC-IP>
+
+# 2. Clone the repository
+git clone https://github.com/yourusername/ShopDeploy.git
+cd ShopDeploy/scripts
+
+# 3. Run the complete bootstrap script
+chmod +x *.sh
+sudo ./ec2-bootstrap.sh
+```
+
+### What Gets Installed
+
+| Tool | Version | Purpose |
+|------|---------|--------|
+| **Docker** | Latest | Container runtime |
+| **Docker Compose** | v2 | Multi-container orchestration |
+| **Jenkins** | LTS | CI/CD automation |
+| **Java** | 17 (Corretto) | Jenkins runtime |
+| **Terraform** | Latest | Infrastructure as Code |
+| **kubectl** | Latest stable | Kubernetes CLI |
+| **Helm** | v3 | Kubernetes package manager |
+| **AWS CLI** | v2 | AWS management |
+| **eksctl** | Latest | EKS cluster management |
+| **Node.js** | 18.x | Build tools |
+
+### Individual Tool Installation
+
+```bash
+# Install tools individually if needed
+cd scripts
+
+./install-docker.sh      # Docker + Docker Compose
+./install-jenkins.sh     # Jenkins + Java 17
+./install-terraform.sh   # Terraform
+./install-kubectl.sh     # kubectl + autocompletion
+./install-helm.sh        # Helm + common repositories
+./install-awscli.sh      # AWS CLI v2 + eksctl
+```
+
+### Post-Installation
+
+```bash
+# 1. Get Jenkins initial password
+sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+
+# 2. Access Jenkins
+http://<EC2-IP>:8080
+
+# 3. Configure AWS credentials
+aws configure
+
+# 4. Log out and back in (for Docker group)
+exit
+ssh -i "your-key.pem" ec2-user@<EC2-IP>
+
+# 5. Verify installations
+docker --version
+terraform --version
+kubectl version --client
+helm version
+aws --version
+```
+
+---
+
+## �🚀 Getting Started
 
 ### Prerequisites
 
