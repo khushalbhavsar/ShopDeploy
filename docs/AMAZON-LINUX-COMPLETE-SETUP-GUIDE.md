@@ -163,26 +163,41 @@ exit
 #### 3.3 Install Jenkins
 
 ```bash
-# Install Java 17 (required for Jenkins)
-sudo yum install -y java-17-amazon-corretto java-17-amazon-corretto-devel
+# Install Java 21 (Amazon Corretto - required for Jenkins)
+sudo dnf install java-21-amazon-corretto -y
+# Or alternative: sudo yum install fontconfig java-21-openjdk -y
+
+# Verify Java installation
+java --version
+
+# Install Maven
+sudo yum install maven -y
+mvn -v
 
 # Add Jenkins repository
 sudo wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
 sudo rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
 
+# Upgrade packages
+sudo yum upgrade -y
+
 # Install Jenkins
 sudo yum install -y jenkins
 
+# Verify Jenkins installation
+jenkins --version
+
+# Add Jenkins to docker group
+sudo usermod -aG docker jenkins
+
 # Start and enable Jenkins
-sudo systemctl enable jenkins
 sudo systemctl start jenkins
+sudo systemctl enable jenkins
 
 # Get initial admin password
 sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 
-# Add Jenkins to docker group
-sudo usermod -aG docker jenkins
-sudo systemctl restart jenkins
+# Access Jenkins at http://<EC2-PUBLIC-IP>:8080
 ```
 
 #### 3.4 Install Terraform
@@ -528,52 +543,156 @@ Click "Save"
 
 SonarQube is used for continuous code quality inspection and security vulnerability detection.
 
-### 7.1 Install SonarQube Using Docker
+**Environment Requirements:**
+- Instance Type: t2.medium / t3.medium or higher (min 4GB RAM)
+- Key Pair: `sonar.pem`
+- Security Group: Port 9000 open
+- Storage: 20GB SSD
+
+### 7.1 Update System Packages
 
 ```bash
-# Create a directory for SonarQube data
-sudo mkdir -p /opt/sonarqube/data
-sudo mkdir -p /opt/sonarqube/logs
-sudo mkdir -p /opt/sonarqube/extensions
-sudo chown -R 1000:1000 /opt/sonarqube
-
-# Set required system limits for Elasticsearch
-sudo sysctl -w vm.max_map_count=524288
-sudo sysctl -w fs.file-max=131072
-
-# Make it persistent
-echo "vm.max_map_count=524288" | sudo tee -a /etc/sysctl.conf
-echo "fs.file-max=131072" | sudo tee -a /etc/sysctl.conf
-
-# Pull the latest SonarQube LTS image (10.7+)
-docker pull sonarqube:10.7-community
-
-# Run SonarQube container
-docker run -d --name sonarqube \
-    --restart unless-stopped \
-    -p 9000:9000 \
-    -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true \
-    -v /opt/sonarqube/data:/opt/sonarqube/data \
-    -v /opt/sonarqube/logs:/opt/sonarqube/logs \
-    -v /opt/sonarqube/extensions:/opt/sonarqube/extensions \
-    sonarqube:10.7-community
-
-# Verify container is running
-docker ps | grep sonarqube
-
-# Wait for SonarQube to start (takes 1-2 minutes)
-echo "Waiting for SonarQube to start..."
-until curl -s http://localhost:9000/api/system/status | grep -q '"status":"UP"'; do
-    sleep 10
-    echo "Still waiting..."
-done
-echo "SonarQube is ready!"
-
-# Check logs
-docker logs -f sonarqube
+sudo yum update -y
+sudo dnf update -y
+sudo yum install unzip -y
 ```
 
-### 7.2 Access SonarQube Web UI
+### 7.2 Install Java 17 (Amazon Corretto)
+
+```bash
+sudo yum search java-17
+sudo yum install java-17-amazon-corretto.x86_64 -y
+java --version
+```
+
+### 7.3 Install PostgreSQL 15
+
+```bash
+sudo dnf install postgresql15.x86_64 postgresql15-server -y
+sudo postgresql-setup --initdb
+
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+```
+
+### 7.4 Configure PostgreSQL User & Database
+
+```bash
+# Set postgres user password
+sudo passwd postgres
+# Enter password: Khushal@41 (retype)
+
+# Login as postgres
+sudo -i -u postgres psql
+```
+
+Run SQL commands:
+
+```sql
+ALTER USER postgres WITH PASSWORD 'Khushal@41';
+CREATE DATABASE sonarqube;
+CREATE USER sonar WITH ENCRYPTED PASSWORD 'Khushal@41';
+GRANT ALL PRIVILEGES ON DATABASE sonarqube TO sonar;
+\q
+```
+
+### 7.5 Download & Setup SonarQube
+
+```bash
+cd /opt
+sudo wget https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-10.6.0.92116.zip
+sudo unzip sonarqube-10.6.0.92116.zip
+sudo mv sonarqube-10.6.0.92116 sonarqube
+```
+
+### 7.6 Set Kernel & OS Limits
+
+```bash
+# Set vm.max_map_count
+echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+
+# Add limits for sonar user
+sudo tee -a /etc/security/limits.conf <<EOF
+sonar   -   nofile   65536
+sonar   -   nproc    4096
+EOF
+```
+
+### 7.7 Configure SonarQube Database Settings
+
+Edit the SonarQube configuration file:
+
+```bash
+sudo nano /opt/sonarqube/conf/sonar.properties
+```
+
+Add the following lines:
+
+```properties
+sonar.jdbc.username=sonar
+sonar.jdbc.password=Khushal@41
+sonar.jdbc.url=jdbc:postgresql://localhost:5432/sonarqube
+```
+
+### 7.8 Create SonarQube User
+
+```bash
+sudo useradd sonar
+sudo chown -R sonar:sonar /opt/sonarqube
+```
+
+### 7.9 Create Systemd Service File
+
+```bash
+sudo nano /etc/systemd/system/sonarqube.service
+```
+
+Paste the following:
+
+```ini
+[Unit]
+Description=SonarQube LTS Service
+After=network.target
+
+[Service]
+Type=forking
+User=sonar
+Group=sonar
+LimitNOFILE=65536
+LimitNPROC=4096
+
+Environment="JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64"
+Environment="PATH=/usr/lib/jvm/java-17-amazon-corretto.x86_64/bin:/usr/local/bin:/usr/bin:/bin"
+
+ExecStart=/opt/sonarqube/bin/linux-x86-64/sonar.sh start
+ExecStop=/opt/sonarqube/bin/linux-x86-64/sonar.sh stop
+
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### 7.10 Set Permissions
+
+```bash
+sudo chmod +x /opt/sonarqube/bin/linux-x86-64/sonar.sh
+sudo chmod -R 755 /opt/sonarqube/bin/
+sudo chown -R sonar:sonar /opt/sonarqube
+```
+
+### 7.11 Start SonarQube Service
+
+```bash
+sudo systemctl reset-failed sonarqube
+sudo systemctl daemon-reload
+sudo systemctl start sonarqube
+sudo systemctl enable sonarqube
+sudo systemctl status sonarqube -l
+```
+
+### 7.12 Access SonarQube Web UI
 
 1. Open browser: `http://<EC2-PUBLIC-IP>:9000`
 2. Default credentials:
@@ -581,7 +700,7 @@ docker logs -f sonarqube
    - **Password:** `admin`
 3. You will be prompted to change the password on first login
 
-### 7.3 Create SonarQube Project
+### 7.13 Create SonarQube Project
 
 1. **Login to SonarQube**
 2. Click **"Create Project"** → **"Manually"**
@@ -600,7 +719,7 @@ docker logs -f sonarqube
    - Choose **"Other CI"** for Jenkins integration
    - Select **"JavaScript"** for frontend or appropriate language
 
-### 7.4 Install SonarQube Scanner
+### 7.14 Install SonarQube Scanner
 
 ```bash
 # Download SonarQube Scanner (latest version 6.2)
@@ -621,7 +740,7 @@ sonar-scanner --version
 # Expected output: SonarScanner 6.2.1.4610
 ```
 
-### 7.5 Configure SonarQube Quality Gates
+### 7.15 Configure SonarQube Quality Gates
 
 1. Go to **Quality Gates** in SonarQube
 2. Click **"Create"** or use default **"Sonar way"**
@@ -636,7 +755,7 @@ sonar-scanner --version
 | Security Hotspots Reviewed | is less than | 100% |
 | Security Rating | is worse than | A |
 
-### 7.6 Integrate SonarQube with Jenkins
+### 7.16 Integrate SonarQube with Jenkins
 
 #### Install SonarQube Plugin in Jenkins:
 
@@ -671,7 +790,7 @@ sonar-scanner --version
    - **Version:** Select latest version
 5. Click **Save**
 
-### 7.7 Add SonarQube Stage to Jenkinsfile
+### 7.17 Add SonarQube Stage to Jenkinsfile
 
 Add the following stage to your `Jenkinsfile`:
 
@@ -708,7 +827,7 @@ stage('Quality Gate') {
 }
 ```
 
-### 7.8 Create sonar-project.properties File
+### 7.18 Create sonar-project.properties File
 
 Create this file in your project root:
 
@@ -735,7 +854,7 @@ sonar.javascript.lcov.reportPaths=shopdeploy-backend/coverage/lcov.info,shopdepl
 sonar.sourceEncoding=UTF-8
 ```
 
-### 7.9 Run SonarQube Analysis Manually
+### 7.19 Run SonarQube Analysis Manually
 
 ```bash
 # Navigate to project directory
@@ -758,7 +877,7 @@ sonar-scanner \
 echo "Analysis complete! View results at http://<EC2-PUBLIC-IP>:9000/dashboard?id=shopdeploy"
 ```
 
-### 7.10 SonarQube with Docker Compose (Alternative)
+### 7.20 SonarQube with Docker Compose (Alternative)
 
 For production setup with PostgreSQL database:
 
@@ -777,7 +896,7 @@ services:
     environment:
       SONAR_JDBC_URL: jdbc:postgresql://db:5432/sonar
       SONAR_JDBC_USERNAME: sonar
-      SONAR_JDBC_PASSWORD: sonar
+      SONAR_JDBC_PASSWORD: Khushal@41
       SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
     volumes:
       - sonarqube_data:/opt/sonarqube/data
@@ -798,7 +917,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: sonar
-      POSTGRES_PASSWORD: sonar
+      POSTGRES_PASSWORD: Khushal@41
       POSTGRES_DB: sonar
     volumes:
       - postgresql_data:/var/lib/postgresql/data
@@ -926,80 +1045,192 @@ kubectl get ingress -n shopdeploy
 
 ## 📊 Step 9: Monitoring Setup (Prometheus & Grafana)
 
-### 9.1 Automated Installation
+**Environment Requirements:**
+- Instance Type: t3.medium
+- Security Group Inbound: Port 3000, 9090, 9100
+
+### 9.1 Install Grafana Server
 
 ```bash
-# Set Grafana admin password
-export GRAFANA_ADMIN_PASSWORD="YourSecurePassword123!"
+# Update system and install dependencies
+sudo yum update -y
+sudo yum install wget tar -y
+sudo yum install make -y
 
-# Navigate to monitoring directory
-cd ~/ShopDeploy/monitoring
+# Install Grafana Enterprise 12.2.1
+sudo yum install -y https://dl.grafana.com/enterprise/release/grafana-enterprise-12.2.1-1.x86_64.rpm
 
-# Make script executable
-chmod +x install-monitoring.sh
+# Start Grafana service
+sudo systemctl start grafana-server
+sudo systemctl enable grafana-server
+sudo systemctl status grafana-server
 
-# Run installation
-./install-monitoring.sh monitoring
+# Verify installation
+grafana-server --version
 ```
 
-### 9.2 Manual Installation
+**Access Grafana:**
+- URL: `http://<EC2-PUBLIC-IP>:3000`
+- Default Login: `admin` / `admin`
+- Change password to: `Khushal@41`
+
+### 9.2 Install Prometheus
 
 ```bash
-# Add Helm repositories
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo add grafana https://grafana.github.io/helm-charts
-helm repo update
+# Download Prometheus 3.5.0
+cd ~
+wget https://github.com/prometheus/prometheus/releases/download/v3.5.0/prometheus-3.5.0.linux-amd64.tar.gz
 
-# Create monitoring namespace
-kubectl create namespace monitoring
+# Extract and setup
+sudo tar -xvf prometheus-3.5.0.linux-amd64.tar.gz
+sudo mv prometheus-3.5.0.linux-amd64 prometheus
 
-# Install Prometheus
-helm upgrade --install prometheus prometheus-community/prometheus \
-    --namespace monitoring \
-    --values ~/ShopDeploy/monitoring/prometheus-values.yaml \
-    --wait --timeout 10m
+# Create prometheus user
+sudo useradd --no-create-home --shell /bin/false prometheus
 
-# Install Grafana
-helm upgrade --install grafana grafana/grafana \
-    --namespace monitoring \
-    --values ~/ShopDeploy/monitoring/grafana-values.yaml \
-    --set adminPassword="YourSecurePassword123!" \
-    --wait --timeout 10m
+# Setup directories and binaries
+cd prometheus
+sudo cp -r prometheus /usr/local/bin/
+sudo cp -r promtool /usr/local/bin/
+sudo mkdir -p /etc/prometheus
+sudo mkdir -p /var/lib/prometheus
+sudo cp prometheus.yml /etc/prometheus/
+
+# Set ownership
+sudo chown -R prometheus:prometheus /etc/prometheus /var/lib/prometheus
+sudo chown prometheus:prometheus /usr/local/bin/prometheus
+sudo chown prometheus:prometheus /usr/local/bin/promtool
 ```
 
-### 9.3 Access Monitoring Tools
+### 9.3 Configure Prometheus Systemd Service
 
 ```bash
-# Get Grafana LoadBalancer URL
-kubectl get svc grafana -n monitoring
-
-# Or port-forward for local access
-kubectl port-forward svc/grafana 3000:80 -n monitoring &
-
-# Access Prometheus
-kubectl port-forward svc/prometheus-server 9090:80 -n monitoring &
+sudo nano /etc/systemd/system/prometheus.service
 ```
 
-**Access URLs:**
-- **Grafana:** `http://<LOADBALANCER-URL>:3000` or `http://localhost:3000`
-  - Username: `admin`
-  - Password: The password you set
-- **Prometheus:** `http://localhost:9090`
+Paste the following:
 
-### 9.4 Verify Monitoring Installation
+```ini
+[Unit]
+Description=Prometheus Monitoring
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=prometheus
+Group=prometheus
+Type=simple
+ExecStart=/usr/local/bin/prometheus \
+  --config.file=/etc/prometheus/prometheus.yml \
+  --storage.tsdb.path=/var/lib/prometheus \
+  --web.console.templates=/etc/prometheus/consoles \
+  --web.console.libraries=/etc/prometheus/console_libraries
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Start Prometheus:
 
 ```bash
-# Check monitoring pods
-kubectl get pods -n monitoring
-
-# Expected output:
-# NAME                                             READY   STATUS    RESTARTS   AGE
-# grafana-xxxxxxxxx-xxxxx                          1/1     Running   0          5m
-# prometheus-alertmanager-xxxxxxxxx-xxxxx          1/1     Running   0          5m
-# prometheus-kube-state-metrics-xxxxxxxxx-xxxxx    1/1     Running   0          5m
-# prometheus-node-exporter-xxxxx                   1/1     Running   0          5m
-# prometheus-server-xxxxxxxxx-xxxxx                2/2     Running   0          5m
+sudo systemctl daemon-reload
+sudo systemctl start prometheus
+sudo systemctl enable prometheus
+sudo systemctl status prometheus
 ```
+
+**Access Prometheus:**
+- URL: `http://<EC2-PUBLIC-IP>:9090`
+
+### 9.4 Install Node Exporter
+
+```bash
+# Download Node Exporter
+cd ~
+wget https://github.com/prometheus/node_exporter/releases/download/v1.10.2/node_exporter-1.10.2.linux-amd64.tar.gz
+tar xvf node_exporter-1.10.2.linux-amd64.tar.gz
+cd node_exporter-1.10.2.linux-amd64
+
+# Setup Node Exporter
+sudo cp node_exporter /usr/local/bin
+sudo useradd node_exporter --no-create-home --shell /bin/false
+sudo chown node_exporter:node_exporter /usr/local/bin/node_exporter
+```
+
+### 9.5 Configure Node Exporter Systemd Service
+
+```bash
+sudo nano /etc/systemd/system/node_exporter.service
+```
+
+Paste the following:
+
+```ini
+[Unit]
+Description=Node Exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=node_exporter
+Group=node_exporter
+Type=simple
+ExecStart=/usr/local/bin/node_exporter
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Start Node Exporter:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl start node_exporter
+sudo systemctl enable node_exporter
+sudo systemctl status node_exporter
+```
+
+**Access Node Exporter Metrics:**
+- URL: `http://<EC2-PUBLIC-IP>:9100/metrics`
+
+### 9.6 Configure Prometheus to Scrape Node Exporter
+
+Edit Prometheus configuration:
+
+```bash
+sudo nano /etc/prometheus/prometheus.yml
+```
+
+Add under `scrape_configs`:
+
+```yaml
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['localhost:9100']
+```
+
+Restart Prometheus:
+
+```bash
+sudo systemctl restart prometheus
+```
+
+### 9.7 Configure Grafana Data Source
+
+1. Login to Grafana at `http://<EC2-PUBLIC-IP>:3000`
+2. Go to **Configuration → Data Sources → Add data source**
+3. Select **Prometheus**
+4. Set URL: `http://localhost:9090`
+5. Click **Save & Test**
+
+### 9.8 Kubernetes Monitoring (Alternative)
+
+For EKS deployments, use Helm charts:
 
 ---
 

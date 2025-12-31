@@ -2,29 +2,161 @@
 
 ## Table of Contents
 1. [Prerequisites](#prerequisites)
-2. [Jenkins Installation](#jenkins-installation)
-3. [Required Jenkins Plugins](#required-jenkins-plugins)
-4. [Credentials Configuration](#credentials-configuration)
-5. [Pipeline Configuration](#pipeline-configuration)
-6. [Webhook Setup](#webhook-setup)
-7. [Troubleshooting](#troubleshooting)
+2. [Connect to EC2 Instance](#connect-to-ec2-instance)
+3. [Install Required Packages](#install-required-packages)
+4. [Start Jenkins](#start-jenkins)
+5. [Access Jenkins Web UI](#access-jenkins-web-ui)
+6. [Required Jenkins Plugins](#required-jenkins-plugins)
+7. [Credentials Configuration](#credentials-configuration)
+8. [Pipeline Configuration](#pipeline-configuration)
+9. [Webhook Setup](#webhook-setup)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Prerequisites
 
 Before setting up Jenkins, ensure you have:
-- An EC2 instance (t3.medium or larger recommended)
-- Docker installed
-- kubectl configured
-- Helm installed
-- AWS CLI configured
+
+### AWS EC2 Instance Requirements
+- **Instance Type**: Amazon Linux 2023 (t3.large recommended)
+- **Storage**: 30 GB SSD
+
+### Security Group Ports Open
+| Port | Service | Description |
+|------|---------|-------------|
+| 22 | SSH | Secure Shell access |
+| 80 | HTTP | Web traffic |
+| 443 | HTTPS | Secure web traffic |
+| 8080 | Jenkins | Jenkins Web UI |
+
+### Key Pair
+- **Key Pair**: `jenkins.pem` (ensure secure permissions with `chmod 400`)
 
 ---
 
-## Jenkins Installation
+## Connect to EC2 Instance
 
-### Option 1: Install on EC2 (Recommended)
+### ⚙️ Step 1: Connect to EC2 Instance
+
+```bash
+# Navigate to your downloads folder (where jenkins.pem is located)
+cd Downloads
+
+# Set secure permissions on the key file
+chmod 400 jenkins.pem
+
+# Connect to your EC2 instance
+ssh -i "jenkins.pem" ec2-user@<YOUR_EC2_PUBLIC_IP>
+```
+
+---
+
+## Install Required Packages
+
+### 📦 Step 2: Install Required Packages
+
+#### 1. Update and Install Git
+
+```bash
+sudo yum update -y
+sudo yum install git -y
+git --version
+```
+
+#### 2. Configure Git (Optional)
+
+```bash
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
+git config --list
+```
+
+#### 3. Install Docker
+
+```bash
+sudo yum install docker -y
+sudo systemctl start docker
+sudo systemctl enable docker
+```
+
+#### 4. Install Java (Amazon Corretto 21)
+
+```bash
+# Option 1: Amazon Corretto 21 (Recommended)
+sudo dnf install java-21-amazon-corretto -y
+
+# Option 2: OpenJDK 21 (Alternative)
+sudo yum install fontconfig java-21-openjdk -y
+
+# Verify installation
+java --version
+```
+
+#### 5. Install Maven
+
+```bash
+sudo yum install maven -y
+mvn -v
+```
+
+#### 6. Install Jenkins
+
+```bash
+# Add Jenkins repository
+sudo wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
+sudo rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+
+# Upgrade packages
+sudo yum upgrade -y
+
+# Install Jenkins
+sudo yum install jenkins -y
+
+# Verify installation
+jenkins --version
+```
+
+#### 7. Add Jenkins User to Docker Group
+
+```bash
+sudo usermod -aG docker jenkins
+```
+
+---
+
+## Start Jenkins
+
+### ▶️ Step 3: Start Jenkins
+
+```bash
+sudo systemctl start jenkins
+sudo systemctl enable jenkins
+```
+
+---
+
+## Access Jenkins Web UI
+
+### 🌐 Step 4: Access Jenkins Web UI
+
+1. Open your browser and go to:
+   ```
+   http://<YOUR_EC2_PUBLIC_IP>:8080
+   ```
+
+2. Unlock Jenkins using the initial admin password:
+   ```bash
+   sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+   ```
+
+3. Paste the password into the Jenkins setup screen and proceed.
+
+---
+
+### Quick Installation Script
+
+Alternatively, run the installation script:
 
 ```bash
 # Run the installation script
@@ -32,7 +164,7 @@ chmod +x scripts/install-jenkins.sh
 ./scripts/install-jenkins.sh
 ```
 
-### Option 2: Run Jenkins in Docker
+### Run Jenkins in Docker (Alternative)
 
 ```bash
 docker run -d \
@@ -44,7 +176,7 @@ docker run -d \
   jenkins/jenkins:lts
 ```
 
-### Option 3: Deploy on Kubernetes using Helm
+### Deploy on Kubernetes using Helm (Alternative)
 
 ```bash
 # Add Jenkins Helm repository
@@ -132,18 +264,161 @@ For private repositories:
 
 ### 3. SonarQube Credentials
 
-#### Install SonarQube (Docker)
+#### Install SonarQube on Amazon Linux 2 (Native Installation)
+
+**Environment Requirements:**
+- Instance Type: t2.medium / t3.medium or higher
+- RAM: Minimum 4GB
+- Key Pair: `sonar.pem`
+- Security Group: Port 9000 open
+- Storage: 20GB SSD
+
+##### Step 1: Update System Packages
 
 ```bash
-# Run SonarQube container on your server
-docker run -d --name sonarqube \
-  -p 9000:9000 \
-  -v sonarqube_data:/opt/sonarqube/data \
-  -v sonarqube_logs:/opt/sonarqube/logs \
-  sonarqube:lts-community
+sudo yum update -y
+sudo dnf update -y
+sudo yum install unzip -y
 ```
 
-Access SonarQube at `http://<EC2-IP>:9000` (default login: `admin` / `admin`)
+##### Step 2: Install Java 17 (Amazon Corretto)
+
+```bash
+sudo yum search java-17
+sudo yum install java-17-amazon-corretto.x86_64 -y
+java --version
+```
+
+##### Step 3: Install PostgreSQL 15
+
+```bash
+sudo dnf install postgresql15.x86_64 postgresql15-server -y
+sudo postgresql-setup --initdb
+
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+```
+
+##### Step 4: Configure PostgreSQL User & Database
+
+```bash
+# Set postgres user password
+sudo passwd postgres
+# Enter password: Khushal@41 (retype)
+
+# Login as postgres
+sudo -i -u postgres psql
+```
+
+Run SQL commands:
+
+```sql
+ALTER USER postgres WITH PASSWORD 'Khushal@41';
+CREATE DATABASE sonarqube;
+CREATE USER sonar WITH ENCRYPTED PASSWORD 'Khushal@41';
+GRANT ALL PRIVILEGES ON DATABASE sonarqube TO sonar;
+\q
+```
+
+##### Step 5: Download & Setup SonarQube
+
+```bash
+cd /opt
+sudo wget https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-10.6.0.92116.zip
+sudo unzip sonarqube-10.6.0.92116.zip
+sudo mv sonarqube-10.6.0.92116 sonarqube
+```
+
+##### Step 6: Set Kernel & OS Limits
+
+```bash
+# Set vm.max_map_count
+echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+
+# Add limits for sonar user
+sudo tee -a /etc/security/limits.conf <<EOF
+sonar   -   nofile   65536
+sonar   -   nproc    4096
+EOF
+```
+
+##### Step 7: Configure SonarQube Database Settings
+
+```bash
+sudo nano /opt/sonarqube/conf/sonar.properties
+```
+
+Add the following lines:
+
+```properties
+sonar.jdbc.username=sonar
+sonar.jdbc.password=Khushal@41
+sonar.jdbc.url=jdbc:postgresql://localhost:5432/sonarqube
+```
+
+##### Step 8: Create SonarQube User
+
+```bash
+sudo useradd sonar
+sudo chown -R sonar:sonar /opt/sonarqube
+```
+
+##### Step 9: Create Systemd Service File
+
+```bash
+sudo nano /etc/systemd/system/sonarqube.service
+```
+
+Paste the following:
+
+```ini
+[Unit]
+Description=SonarQube LTS Service
+After=network.target
+
+[Service]
+Type=forking
+User=sonar
+Group=sonar
+LimitNOFILE=65536
+LimitNPROC=4096
+
+Environment="JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64"
+Environment="PATH=/usr/lib/jvm/java-17-amazon-corretto.x86_64/bin:/usr/local/bin:/usr/bin:/bin"
+
+ExecStart=/opt/sonarqube/bin/linux-x86-64/sonar.sh start
+ExecStop=/opt/sonarqube/bin/linux-x86-64/sonar.sh stop
+
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+##### Step 10: Set Permissions
+
+```bash
+sudo chmod +x /opt/sonarqube/bin/linux-x86-64/sonar.sh
+sudo chmod -R 755 /opt/sonarqube/bin/
+sudo chown -R sonar:sonar /opt/sonarqube
+```
+
+##### Step 11: Start SonarQube Service
+
+```bash
+sudo systemctl reset-failed sonarqube
+sudo systemctl daemon-reload
+sudo systemctl start sonarqube
+sudo systemctl enable sonarqube
+sudo systemctl status sonarqube -l
+```
+
+##### Access SonarQube
+
+Open in browser: `http://<EC2-PUBLIC-IP>:9000`
+
+Default credentials: `admin` / `admin`
 
 #### Generate SonarQube Token
 

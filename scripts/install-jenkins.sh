@@ -1,8 +1,24 @@
 #!/bin/bash
 #==============================================================================
 # ShopDeploy - Jenkins Installation Script
-# Optimized for Amazon Linux 2 / Amazon Linux 2023
+# Optimized for Amazon Linux 2023 (t3.large recommended)
 # Also supports Ubuntu/Debian as fallback
+#==============================================================================
+#
+# Prerequisites:
+#   - AWS EC2 Instance: Amazon Linux 2023 (t3.large recommended)
+#   - Security Group Ports Open:
+#       * SSH: 22
+#       * HTTP: 80
+#       * HTTPS: 443
+#       * Jenkins: 8080
+#   - Storage: 30 GB SSD
+#   - Key Pair: jenkins.pem (ensure secure permissions)
+#
+# Usage:
+#   chmod +x install-jenkins.sh
+#   ./install-jenkins.sh
+#
 #==============================================================================
 
 # Continue on error to complete as much as possible
@@ -12,14 +28,17 @@ set +e
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m'
 
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 
 echo "=============================================="
-echo "  Installing Jenkins on Amazon Linux"
+echo "  ShopDeploy - Jenkins Installation"
+echo "  Optimized for Amazon Linux 2023"
 echo "=============================================="
 
 # Detect OS version
@@ -43,60 +62,85 @@ detect_os() {
 
 detect_os
 
-# Install Jenkins based on OS
-if [[ "$OS" == *"Amazon Linux"* ]]; then
-    log_info "Installing Jenkins for Amazon Linux..."
-    
-    # Check if Amazon Linux 2023
-    if [[ "$VER" == "2023" ]] || [[ -f /etc/amazon-linux-release ]]; then
-        log_info "Detected Amazon Linux 2023"
-        
-        # Install Java 17 on Amazon Linux 2023
-        log_info "Installing Java 17 (Amazon Corretto)..."
-        sudo dnf install -y java-17-amazon-corretto java-17-amazon-corretto-devel
-        
-        # Add Jenkins repository for Amazon Linux 2023
-        sudo wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
-        sudo rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
-        
-        # Install Jenkins
-        sudo dnf install -y jenkins
-        
-    else
-        log_info "Detected Amazon Linux 2"
-        
-        # Install Java 17 on Amazon Linux 2
-        log_info "Installing Java 17 (Amazon Corretto)..."
-        
-        # Try amazon-linux-extras first, then fall back to direct install
-        if command -v amazon-linux-extras &> /dev/null; then
-            sudo amazon-linux-extras install java-openjdk17 -y 2>/dev/null || \
-                sudo yum install -y java-17-amazon-corretto java-17-amazon-corretto-devel
-        else
-            sudo yum install -y java-17-amazon-corretto java-17-amazon-corretto-devel
-        fi
-        
-        # Add Jenkins repository for Amazon Linux 2
-        sudo wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
-        sudo rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
-        
-        # Install Jenkins
-        sudo yum install -y jenkins
-    fi
-    
-    # Configure firewall (if firewalld is running)
-    if systemctl is-active --quiet firewalld; then
-        log_info "Configuring firewall..."
-        sudo firewall-cmd --permanent --add-port=8080/tcp
-        sudo firewall-cmd --reload
-    fi
+#==============================================================================
+# Step 1: Update System and Install Git
+#==============================================================================
+log_step "Step 1: Updating system and installing Git..."
 
-elif [[ "$OS" == *"Ubuntu"* ]] || [[ "$OS" == *"Debian"* ]]; then
-    log_info "Installing Jenkins for Ubuntu/Debian..."
+sudo yum update -y
+sudo yum install git -y
+git --version
+log_info "Git installed successfully!"
+
+# Configure Git (Optional - uncomment and modify as needed)
+# git config --global user.name "Your Name"
+# git config --global user.email "your.email@example.com"
+# git config --list
+
+#==============================================================================
+# Step 2: Install Docker
+#==============================================================================
+log_step "Step 2: Installing Docker..."
+
+sudo yum install docker -y
+sudo systemctl start docker
+sudo systemctl enable docker
+docker --version
+log_info "Docker installed and started successfully!"
+
+#==============================================================================
+# Step 3: Install Java (Amazon Corretto 21)
+#==============================================================================
+log_step "Step 3: Installing Java 21 (Amazon Corretto)..."
+
+# Install Java 21 (Amazon Corretto) - recommended for Amazon Linux 2023
+sudo dnf install java-21-amazon-corretto -y 2>/dev/null || \
+    sudo yum install fontconfig java-21-openjdk -y
+
+java --version
+log_info "Java 21 installed successfully!"
+
+#==============================================================================
+# Step 4: Install Maven
+#==============================================================================
+log_step "Step 4: Installing Maven..."
+
+sudo yum install maven -y
+mvn -v
+log_info "Maven installed successfully!"
+
+#==============================================================================
+# Step 5: Install Jenkins
+#==============================================================================
+log_step "Step 5: Installing Jenkins..."
+
+# Add Jenkins repository
+sudo wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
+sudo rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+
+# Upgrade packages
+sudo yum upgrade -y
+
+# Install Jenkins
+sudo yum install jenkins -y
+jenkins --version
+log_info "Jenkins installed successfully!"
+
+#==============================================================================
+# Step 6: Add Jenkins User to Docker Group
+#==============================================================================
+log_step "Step 6: Adding Jenkins user to Docker group..."
+
+sudo usermod -aG docker jenkins
+log_info "Jenkins user added to Docker group!"
+
+# Handle Ubuntu/Debian fallback
+if [[ "$OS" == *"Ubuntu"* ]] || [[ "$OS" == *"Debian"* ]]; then
+    log_warn "Detected Ubuntu/Debian - using apt-based installation..."
     
-    # Install Java 17
+    # Install Java 21
     sudo apt-get update
-    sudo apt-get install -y fontconfig openjdk-17-jre
+    sudo apt-get install -y fontconfig openjdk-21-jre
     
     # Add Jenkins repository
     sudo mkdir -p /etc/apt/keyrings
@@ -109,16 +153,18 @@ elif [[ "$OS" == *"Ubuntu"* ]] || [[ "$OS" == *"Debian"* ]]; then
     
     sudo apt-get update
     sudo apt-get install -y jenkins
-
-else
-    log_error "Unsupported OS: $OS"
-    log_info "Attempting generic RHEL-based installation..."
     
-    # Generic RHEL-based installation
-    sudo yum install -y java-17-openjdk java-17-openjdk-devel
-    sudo wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
-    sudo rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
-    sudo yum install -y jenkins
+    # Add Jenkins to Docker group
+    sudo usermod -aG docker jenkins
+fi
+
+# Configure firewall (if firewalld is running)
+if systemctl is-active --quiet firewalld; then
+    log_info "Configuring firewall..."
+    sudo firewall-cmd --permanent --add-port=8080/tcp
+    sudo firewall-cmd --permanent --add-port=80/tcp
+    sudo firewall-cmd --permanent --add-port=443/tcp
+    sudo firewall-cmd --reload
 fi
 
 # Set JAVA_HOME
@@ -132,11 +178,13 @@ if [ -f /etc/sysconfig/jenkins ]; then
     echo "JENKINS_JAVA_CMD=$JAVA_PATH/bin/java" | sudo tee -a /etc/sysconfig/jenkins
 fi
 
-# Enable and start Jenkins
-log_info "Starting Jenkins service..."
-sudo systemctl daemon-reload
-sudo systemctl enable jenkins
+#==============================================================================
+# Step 7: Start Jenkins
+#==============================================================================
+log_step "Step 7: Starting Jenkins..."
+
 sudo systemctl start jenkins
+sudo systemctl enable jenkins
 
 # Wait for Jenkins to fully start
 log_info "Waiting for Jenkins to start (this may take 30-60 seconds)..."
@@ -164,29 +212,55 @@ echo ""
 echo "Java version:"
 java -version 2>&1 | head -3
 echo ""
+echo "Jenkins version:"
+jenkins --version 2>/dev/null || echo "Jenkins service is running"
+echo ""
 
-# Display initial admin password
-if [ -f /var/lib/jenkins/secrets/initialAdminPassword ]; then
-    echo "=============================================="
-    log_info "Jenkins Initial Admin Password:"
-    echo ""
-    sudo cat /var/lib/jenkins/secrets/initialAdminPassword
-    echo ""
-    echo "=============================================="
-fi
+#==============================================================================
+# Step 8: Access Jenkins Web UI
+#==============================================================================
+log_step "Step 8: Access Jenkins Web UI"
 
 # Get instance IP for access URL
 INSTANCE_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || hostname -I | awk '{print $1}')
 
 echo ""
-log_info "Jenkins URL: http://${INSTANCE_IP}:8080"
+echo "=============================================="
+echo "  🌐 Jenkins Web UI Access"
+echo "=============================================="
 echo ""
-log_info "Next steps:"
+log_info "Open your browser and go to:"
+echo ""
+echo "  http://${INSTANCE_IP}:8080"
+echo ""
+
+# Display initial admin password
+if [ -f /var/lib/jenkins/secrets/initialAdminPassword ]; then
+    echo "=============================================="
+    log_info "🔐 Unlock Jenkins using the initial admin password:"
+    echo ""
+    sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+    echo ""
+    echo "=============================================="
+    echo ""
+    log_info "Paste the password into the Jenkins setup screen and proceed."
+fi
+
+echo ""
+log_info "✅ Installation Summary:"
+echo "  - Git: $(git --version)"
+echo "  - Docker: $(docker --version 2>/dev/null | head -1)"
+echo "  - Java: $(java --version 2>&1 | head -1)"
+echo "  - Maven: $(mvn -v 2>/dev/null | head -1)"
+echo "  - Jenkins: Installed and running"
+echo ""
+log_info "📋 Next steps:"
 echo "  1. Open http://${INSTANCE_IP}:8080 in your browser"
 echo "  2. Enter the initial admin password shown above"
 echo "  3. Install suggested plugins"
 echo "  4. Create your admin user"
 echo ""
-log_warn "Don't forget to add Jenkins user to docker group:"
-echo "  sudo usermod -aG docker jenkins"
-echo "  sudo systemctl restart jenkins"
+log_warn "💡 Note: Jenkins user has been added to docker group."
+log_warn "   If Docker commands fail, restart Jenkins:"
+echo "     sudo systemctl restart jenkins"
+echo ""

@@ -3,136 +3,334 @@
 ## Table of Contents
 1. [Overview](#overview)
 2. [Prerequisites](#prerequisites)
-3. [Quick Installation](#quick-installation)
-4. [Prometheus Setup](#prometheus-setup)
-5. [Grafana Setup](#grafana-setup)
-6. [Custom Dashboards](#custom-dashboards)
-7. [Alerting Configuration](#alerting-configuration)
-8. [Troubleshooting](#troubleshooting)
+3. [Grafana Server Installation](#grafana-server-installation)
+4. [Prometheus Installation](#prometheus-installation)
+5. [Node Exporter Installation](#node-exporter-installation)
+6. [Kubernetes Installation (Helm)](#kubernetes-installation-helm)
+7. [Custom Dashboards](#custom-dashboards)
+8. [Alerting Configuration](#alerting-configuration)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Overview
 
 The ShopDeploy monitoring stack includes:
-- **Prometheus**: Metrics collection and storage
-- **Grafana**: Visualization and dashboards
+- **Grafana**: Visualization and dashboards (Port 3000)
+- **Prometheus**: Metrics collection and storage (Port 9090)
+- **Node Exporter**: Host-level metrics (Port 9100)
 - **Alertmanager**: Alert routing and notifications
-- **Node Exporter**: Host-level metrics
-- **Kube State Metrics**: Kubernetes object metrics
 
-### Architecture
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     Monitoring Architecture                          │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│   ┌──────────────┐     ┌──────────────┐     ┌──────────────┐       │
-│   │  ShopDeploy  │────▶│  Prometheus  │────▶│   Grafana    │       │
-│   │   Backend    │     │   Server     │     │  Dashboard   │       │
-│   └──────────────┘     └──────────────┘     └──────────────┘       │
-│                              │                                       │
-│   ┌──────────────┐           │              ┌──────────────┐       │
-│   │  ShopDeploy  │───────────┤              │ Alertmanager │       │
-│   │   Frontend   │           │              │    (Slack)   │       │
-│   └──────────────┘           │              └──────────────┘       │
-│                              │                      ▲               │
-│   ┌──────────────┐           │                      │               │
-│   │ Node Exporter│───────────┤                      │               │
-│   └──────────────┘           │              Alert Rules             │
-│                              ▼                                       │
-│   ┌──────────────┐     ┌──────────────┐                            │
-│   │ Kube State   │────▶│   Storage    │                            │
-│   │   Metrics    │     │  (50GB PV)   │                            │
-│   └──────────────┘     └──────────────┘                            │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
-```
+### Environment Requirements
+
+| Component | Instance Type | Ports | Storage |
+|-----------|--------------|-------|---------|
+| Grafana Server | t3.medium | 3000, 9090, 9100 | 20GB SSD |
+| Prometheus | t3.medium | 9090 | 50GB SSD |
+| Node Exporter | Any | 9100 | - |
 
 ---
 
 ## Prerequisites
 
-- Kubernetes cluster (EKS) running
-- kubectl configured
-- Helm 3.x installed
-- Persistent storage available (EBS, etc.)
+- AWS EC2 Instance: Amazon Linux 2 / Amazon Linux 2023
+- Security Group Inbound Rules:
+  - Port 3000 (Grafana)
+  - Port 9090 (Prometheus)
+  - Port 9100 (Node Exporter)
 
 ---
 
-## Quick Installation
+## Grafana Server Installation
 
-### One-Command Installation
+### Step 1: Update System and Install Dependencies
 
 ```bash
-# Set namespace and run installer
-export GRAFANA_ADMIN_PASSWORD="your-secure-password"
-chmod +x monitoring/install-monitoring.sh
-./monitoring/install-monitoring.sh monitoring
+sudo yum update -y
+sudo yum install wget tar -y
+sudo yum install make -y
 ```
 
-### Manual Installation Steps
+### Step 2: Install Grafana Enterprise
 
 ```bash
-# 1. Add Helm repositories
+# Install Grafana Enterprise 12.2.1
+sudo yum install -y https://dl.grafana.com/enterprise/release/grafana-enterprise-12.2.1-1.x86_64.rpm
+
+# Start Grafana service
+sudo systemctl start grafana-server
+sudo systemctl enable grafana-server
+sudo systemctl status grafana-server
+
+# Verify installation
+grafana-server --version
+```
+
+### Step 3: Access Grafana Web UI
+
+Open in browser:
+```
+http://<EC2-PUBLIC-IP>:3000
+```
+
+**Default Credentials:**
+- Username: `admin`
+- Password: `admin`
+
+You will be prompted to change the password on first login. Set a secure password (e.g., `Khushal@41`).
+
+---
+
+## Prometheus Installation
+
+### Step 1: Download Prometheus
+
+```bash
+# Download Prometheus 3.5.0 (Linux AMD64)
+cd ~
+wget https://github.com/prometheus/prometheus/releases/download/v3.5.0/prometheus-3.5.0.linux-amd64.tar.gz
+
+# Extract archive
+sudo tar -xvf prometheus-3.5.0.linux-amd64.tar.gz
+sudo mv prometheus-3.5.0.linux-amd64 prometheus
+```
+
+### Step 2: Create Prometheus User
+
+```bash
+# Create prometheus user (no login shell)
+sudo useradd --no-create-home --shell /bin/false prometheus
+
+# Verify user creation (optional)
+id prometheus
+sudo cat /etc/passwd | grep prometheus
+```
+
+### Step 3: Setup Prometheus Directories and Files
+
+```bash
+cd ~/prometheus
+
+# Copy binaries to /usr/local/bin
+sudo cp -r prometheus /usr/local/bin/
+sudo cp -r promtool /usr/local/bin/
+
+# Create configuration and data directories
+sudo mkdir -p /etc/prometheus
+sudo mkdir -p /var/lib/prometheus
+
+# Copy configuration file
+sudo cp prometheus.yml /etc/prometheus/
+
+# Set ownership
+sudo chown -R prometheus:prometheus /etc/prometheus /var/lib/prometheus
+sudo chown prometheus:prometheus /usr/local/bin/prometheus
+sudo chown prometheus:prometheus /usr/local/bin/promtool
+```
+
+### Step 4: Create Systemd Service
+
+```bash
+sudo nano /etc/systemd/system/prometheus.service
+```
+
+Paste the following:
+
+```ini
+[Unit]
+Description=Prometheus Monitoring
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=prometheus
+Group=prometheus
+Type=simple
+ExecStart=/usr/local/bin/prometheus \
+  --config.file=/etc/prometheus/prometheus.yml \
+  --storage.tsdb.path=/var/lib/prometheus \
+  --web.console.templates=/etc/prometheus/consoles \
+  --web.console.libraries=/etc/prometheus/console_libraries
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Save and exit (Ctrl+X, Y, Enter).
+
+### Step 5: Start Prometheus Service
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl start prometheus
+sudo systemctl enable prometheus
+sudo systemctl status prometheus
+```
+
+### Step 6: Access Prometheus UI
+
+Open in browser:
+```
+http://<EC2-PUBLIC-IP>:9090
+```
+
+---
+
+## Node Exporter Installation
+
+Node Exporter collects hardware and OS metrics from the host.
+
+### Step 1: Download Node Exporter
+
+```bash
+cd ~
+wget https://github.com/prometheus/node_exporter/releases/download/v1.10.2/node_exporter-1.10.2.linux-amd64.tar.gz
+
+# Extract archive
+tar xvf node_exporter-1.10.2.linux-amd64.tar.gz
+cd node_exporter-1.10.2.linux-amd64
+```
+
+### Step 2: Setup Node Exporter
+
+```bash
+# Copy binary to /usr/local/bin
+sudo cp node_exporter /usr/local/bin
+
+# Create node_exporter user
+sudo useradd node_exporter --no-create-home --shell /bin/false
+
+# Set ownership
+sudo chown node_exporter:node_exporter /usr/local/bin/node_exporter
+```
+
+### Step 3: Create Systemd Service
+
+```bash
+sudo nano /etc/systemd/system/node_exporter.service
+```
+
+Paste the following:
+
+```ini
+[Unit]
+Description=Node Exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=node_exporter
+Group=node_exporter
+Type=simple
+ExecStart=/usr/local/bin/node_exporter
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Save and exit.
+
+### Step 4: Start Node Exporter Service
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl start node_exporter
+sudo systemctl enable node_exporter
+sudo systemctl status node_exporter
+```
+
+### Step 5: Access Node Exporter Metrics
+
+Open in browser:
+```
+http://<EC2-PUBLIC-IP>:9100/metrics
+```
+
+---
+
+## Configure Prometheus to Scrape Node Exporter
+
+Edit Prometheus configuration to add Node Exporter as a target:
+
+```bash
+sudo nano /etc/prometheus/prometheus.yml
+```
+
+Add the following under `scrape_configs`:
+
+```yaml
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['localhost:9100']
+```
+
+Restart Prometheus:
+
+```bash
+sudo systemctl restart prometheus
+```
+
+---
+
+## Configure Grafana Data Source
+
+1. Login to Grafana at `http://<EC2-PUBLIC-IP>:3000`
+2. Go to **Configuration → Data Sources → Add data source**
+3. Select **Prometheus**
+4. Set URL: `http://localhost:9090`
+5. Click **Save & Test**
+
+---
+
+## Kubernetes Installation (Helm)
+
+For Kubernetes/EKS deployments, use Helm charts:
+
+### Add Helm Repositories
+
+```bash
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo add grafana https://grafana.github.io/helm-charts
 helm repo update
+```
 
-# 2. Create namespace
+### Install Prometheus on Kubernetes
+
+```bash
 kubectl create namespace monitoring
 
-# 3. Install Prometheus
 helm upgrade --install prometheus prometheus-community/prometheus \
     --namespace monitoring \
     --values monitoring/prometheus-values.yaml \
     --wait --timeout 10m
+```
 
-# 4. Install Grafana
+### Install Grafana on Kubernetes
+
+```bash
 helm upgrade --install grafana grafana/grafana \
     --namespace monitoring \
     --values monitoring/grafana-values.yaml \
-    --set adminPassword="your-secure-password" \
+    --set adminPassword="Khushal@41" \
     --wait --timeout 10m
 ```
 
----
-
-## Prometheus Setup
-
-### Configuration Overview
-
-The [prometheus-values.yaml](../monitoring/prometheus-values.yaml) configures:
-
-| Component | Enabled | Storage | Purpose |
-|-----------|---------|---------|---------|
-| Prometheus Server | ✅ | 50Gi | Main metrics storage |
-| Alertmanager | ✅ | 10Gi | Alert routing |
-| Node Exporter | ✅ | - | Host metrics |
-| Kube State Metrics | ✅ | - | K8s object metrics |
-| Push Gateway | ❌ | - | Batch job metrics |
-
-### Scrape Configuration
-
-Prometheus automatically discovers pods with these annotations:
-
-```yaml
-podAnnotations:
-  prometheus.io/scrape: "true"
-  prometheus.io/port: "5000"
-  prometheus.io/path: "/api/health/metrics"
-```
-
-### Verify Prometheus Installation
+### Access Kubernetes Monitoring
 
 ```bash
-# Check pods
-kubectl get pods -n monitoring -l app=prometheus
+# Port forward Grafana
+kubectl port-forward svc/grafana 3000:80 -n monitoring &
 
-# Port forward to access UI
-kubectl port-forward svc/prometheus-server 9090:80 -n monitoring
+# Port forward Prometheus
+kubectl port-forward svc/prometheus-server 9090:80 -n monitoring &
 
-# Access at http://localhost:9090
+# Get Grafana admin password
+kubectl get secret grafana -n monitoring -o jsonpath="{.data.admin-password}" | base64 --decode
 ```
 
 ### Useful PromQL Queries
@@ -155,8 +353,6 @@ rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) * 1
 ```
 
 ---
-
-## Grafana Setup
 
 ### Access Grafana
 
