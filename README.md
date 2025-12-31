@@ -236,7 +236,9 @@ ShopDeploy/
 ├── 📂 scripts/                     # Automation scripts
 │   ├── ec2-bootstrap.sh            # 🚀 Complete EC2 setup (Amazon Linux 2/2023)
 │   ├── install-docker.sh           # Docker + Docker Compose (AL2/AL2023)
-│   ├── install-jenkins.sh          # Jenkins LTS + Java 17 (AL2/AL2023)
+│   ├── install-jenkins.sh          # Jenkins LTS + Java 21 (AL2/AL2023)
+│   ├── install-sonarqube.sh        # SonarQube + PostgreSQL 15 (AL2)
+│   ├── install-grafana-prometheus.sh # Grafana 12.2 + Prometheus 3.5 + Node Exporter (AL2/AL2023)
 │   ├── install-terraform.sh        # Terraform via HashiCorp repo (AL2/AL2023)
 │   ├── install-kubectl.sh          # kubectl + autocompletion (AL2/AL2023)
 │   ├── install-helm.sh             # Helm 3 + common repos (AL2/AL2023)
@@ -342,13 +344,18 @@ sudo ./ec2-bootstrap.sh
 | **Docker** | Latest | Container runtime |
 | **Docker Compose** | v2 | Multi-container orchestration |
 | **Jenkins** | LTS | CI/CD automation |
-| **Java** | 17 (Corretto) | Jenkins runtime |
+| **Java** | 21 (Corretto) | Jenkins runtime |
+| **Maven** | Latest | Build automation |
 | **Terraform** | Latest | Infrastructure as Code |
 | **kubectl** | Latest stable | Kubernetes CLI |
 | **Helm** | v3 | Kubernetes package manager |
 | **AWS CLI** | v2 | AWS management |
 | **eksctl** | Latest | EKS cluster management |
 | **Node.js** | 18.x | Build tools |
+| **SonarQube** | 10.6.0 | Code quality analysis |
+| **Grafana** | 12.2.1 | Metrics visualization |
+| **Prometheus** | 3.5.0 | Metrics collection |
+| **Node Exporter** | 1.10.2 | System metrics |
 
 ### Individual Tool Installation
 
@@ -356,12 +363,14 @@ sudo ./ec2-bootstrap.sh
 # Install tools individually if needed
 cd scripts
 
-./install-docker.sh      # Docker + Docker Compose
-./install-jenkins.sh     # Jenkins + Java 17
-./install-terraform.sh   # Terraform
-./install-kubectl.sh     # kubectl + autocompletion
-./install-helm.sh        # Helm + common repositories
-./install-awscli.sh      # AWS CLI v2 + eksctl
+./install-docker.sh              # Docker + Docker Compose
+./install-jenkins.sh             # Jenkins + Java 21 + Maven
+./install-sonarqube.sh           # SonarQube + PostgreSQL 15
+./install-grafana-prometheus.sh  # Grafana + Prometheus + Node Exporter
+./install-terraform.sh           # Terraform
+./install-kubectl.sh             # kubectl + autocompletion
+./install-helm.sh                # Helm + common repositories
+./install-awscli.sh              # AWS CLI v2 + eksctl
 ```
 
 ### Post-Installation
