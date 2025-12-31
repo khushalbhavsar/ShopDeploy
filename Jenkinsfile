@@ -42,7 +42,7 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '20'))
         disableConcurrentBuilds()
         timestamps()
-        ansiColor('xterm')
+        // ansiColor('xterm') - Requires AnsiColor plugin to be installed
     }
 
     parameters {
