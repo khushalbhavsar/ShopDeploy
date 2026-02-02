@@ -409,8 +409,12 @@ pipeline {
                                 
                                 # Verify pods are running
                                 echo "🏥 Health check..."
-                                BACKEND_READY=\$(kubectl get pods -n ${env.K8S_NAMESPACE} -l app=shopdeploy-backend -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}')
-                                FRONTEND_READY=\$(kubectl get pods -n ${env.K8S_NAMESPACE} -l app=shopdeploy-frontend -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}')
+                                # Use correct Helm labels (app.kubernetes.io/name)
+                                BACKEND_READY=\$(kubectl get pods -n ${env.K8S_NAMESPACE} -l app.kubernetes.io/name=shopdeploy-backend -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}')
+                                FRONTEND_READY=\$(kubectl get pods -n ${env.K8S_NAMESPACE} -l app.kubernetes.io/name=shopdeploy-frontend -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}')
+                                
+                                echo "Backend ready status: \$BACKEND_READY"
+                                echo "Frontend ready status: \$FRONTEND_READY"
                                 
                                 if [[ "\$BACKEND_READY" == *"True"* ]] && [[ "\$FRONTEND_READY" == *"True"* ]]; then
                                     echo "✅ All pods are healthy"
