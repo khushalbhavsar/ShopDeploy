@@ -309,7 +309,53 @@ pipeline {
         }
 
         //======================================================================
-        // Stage 6: Deploy to Environment
+        // Stage 6: Deploy MongoDB (Database Dependency)
+        //======================================================================
+        stage('Deploy MongoDB') {
+            steps {
+                echo "🍃 Deploying MongoDB to ${env.K8S_NAMESPACE}..."
+                withCredentials([
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                     credentialsId: 'aws-credentials',
+                     accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']
+                ]) {
+                    script {
+                        if (params.DRY_RUN) {
+                            echo 'ℹ️ Dry run mode - skipping MongoDB deployment'
+                        } else {
+                            sh """
+                                # Configure kubectl for EKS
+                                aws eks update-kubeconfig --region us-east-1 --name ${EKS_CLUSTER_NAME}
+                                
+                                # Create namespace if not exists
+                                kubectl create namespace ${env.K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+                                
+                                # Check if MongoDB already exists and is running
+                                if kubectl get deployment mongodb -n ${env.K8S_NAMESPACE} 2>/dev/null | grep -q "1/1"; then
+                                    echo "✅ MongoDB already running in ${env.K8S_NAMESPACE}"
+                                else
+                                    echo "📦 Deploying MongoDB from k8s-reference/mongodb-deployment.yaml..."
+                                    kubectl apply -f ./k8s-reference/mongodb-deployment.yaml -n ${env.K8S_NAMESPACE}
+                                    
+                                    # Wait for MongoDB to be ready
+                                    echo "⏳ Waiting for MongoDB to be ready..."
+                                    kubectl rollout status deployment/mongodb -n ${env.K8S_NAMESPACE} --timeout=120s
+                                fi
+                                
+                                # Verify MongoDB is running
+                                echo "🔍 MongoDB Status:"
+                                kubectl get pods -n ${env.K8S_NAMESPACE} -l app=mongodb
+                                echo "✅ MongoDB is ready"
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        //======================================================================
+        // Stage 7: Deploy to Environment
         //======================================================================
         stage('Deploy') {
             steps {
@@ -364,7 +410,7 @@ pipeline {
         }
 
         //======================================================================
-        // Stage 7: Smoke Tests
+        // Stage 8: Smoke Tests
         //======================================================================
         stage('Smoke Tests') {
             steps {
