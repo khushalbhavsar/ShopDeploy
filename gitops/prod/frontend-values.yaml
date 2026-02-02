@@ -1,0 +1,41 @@
+# GitOps Values for Frontend - Production Environment
+# These values are used by ArgoCD/Flux for GitOps deployments
+# CI pipeline updates the image.tag on successful builds
+# CRITICAL: Changes to this file trigger production deployments
+
+image:
+  repository: "${ECR_REGISTRY}/shopdeploy-prod-frontend"
+  tag: "latest"  # Updated by CI pipeline (e.g., "42-abc1234")
+  pullPolicy: IfNotPresent
+
+replicaCount: 3
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+env:
+  VITE_API_URL: https://api.shopdeploy.com/api
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 60
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Production-specific settings
+ingress:
+  enabled: true
+  host: shopdeploy.com
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/ssl-redirect: "443"

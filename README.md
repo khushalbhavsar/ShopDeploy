@@ -123,8 +123,16 @@
 
 ## 📁 Project Structure
 
+> **Note:** For enterprise scale, consider separating into two repositories:
+> - `shopdeploy-app` - Application code (backend, frontend, helm, ci-cd)
+> - `shopdeploy-infra` - Infrastructure code (terraform, monitoring, networking)
+
 ```
 ShopDeploy/
+├── 📂 ci-cd/                       # 🔥 CI/CD Pipeline Definitions
+│   ├── Jenkinsfile-ci              # CI Pipeline (Build, Test, Push)
+│   └── Jenkinsfile-cd              # CD Pipeline (Deploy, Rollback)
+│
 ├── 📂 shopdeploy-backend/          # Backend API (Node.js/Express)
 │   ├── src/
 │   │   ├── app.js                  # Express app configuration
@@ -185,7 +193,7 @@ ShopDeploy/
 │       ├── ecr/                    # Container registry
 │       └── eks/                    # EKS cluster & node groups
 │
-├── 📂 helm/                        # Helm Charts for Kubernetes
+├── 📂 helm/                        # Helm Charts for Kubernetes (PRIMARY)
 │   ├── backend/
 │   │   ├── Chart.yaml              # Chart metadata
 │   │   ├── values.yaml             # Default values
@@ -201,64 +209,77 @@ ShopDeploy/
 │       ├── values-prod.yaml
 │       └── templates/
 │
-├── 📂 k8s/                         # Raw Kubernetes manifests
-│   ├── namespace.yaml              # shopdeploy namespace
-│   ├── backend-deployment.yaml     # Backend deployment
-│   ├── backend-service.yaml        # Backend ClusterIP service
-│   ├── backend-configmap.yaml      # Backend configuration
-│   ├── backend-secret.yaml         # Backend secrets (template)
-│   ├── frontend-deployment.yaml    # Frontend deployment
-│   ├── frontend-service.yaml       # Frontend service
-│   ├── frontend-configmap.yaml     # Frontend configuration
-│   ├── mongodb-statefulset.yaml    # MongoDB for development
-│   ├── mongodb-statefulset-prod.yaml # MongoDB for production
+├── 📂 gitops/                      # 🔥 GitOps Values (ArgoCD/Flux)
+│   ├── README.md                   # GitOps documentation
+│   ├── dev/
+│   │   ├── backend-values.yaml     # Dev backend overrides
+│   │   └── frontend-values.yaml    # Dev frontend overrides
+│   ├── staging/
+│   │   ├── backend-values.yaml     # Staging backend overrides
+│   │   └── frontend-values.yaml    # Staging frontend overrides
+│   └── prod/
+│       ├── backend-values.yaml     # Prod backend overrides
+│       └── frontend-values.yaml    # Prod frontend overrides
+│
+├── 📂 k8s-reference/               # ⚠️ Raw K8s manifests (REFERENCE ONLY)
+│   ├── README.md                   # ⚠️ Do not use for deployments
+│   ├── namespace.yaml              # Namespace definition
+│   ├── backend-deployment.yaml     # Backend deployment spec
+│   ├── backend-service.yaml        # Backend service
+│   ├── frontend-deployment.yaml    # Frontend deployment spec
 │   ├── ingress.yaml                # Ingress configuration
 │   ├── hpa.yaml                    # Horizontal Pod Autoscaler
-│   ├── pdb.yaml                    # Pod Disruption Budget
-│   ├── network-policy.yaml         # Network policies
-│   ├── resource-quota.yaml         # Resource quotas
-│   ├── kustomization.yaml          # Kustomize configuration
-│   └── README.md                   # K8s documentation
+│   └── ...                         # Other reference manifests
+│
+├── 📂 policies/                    # 🔥 Production Governance
+│   ├── branch-protection.md        # Branch protection rules
+│   ├── release-strategy.md         # Release & versioning strategy
+│   └── rollback-strategy.md        # Rollback procedures
 │
 ├── 📂 docs/                        # Documentation
-│   ├── AMAZON-LINUX-COMPLETE-SETUP-GUIDE.md  # Complete EC2 setup guide
-│   ├── HELM-SETUP-GUIDE.md         # Helm installation & usage
-│   ├── JENKINS-SETUP-GUIDE.md      # Jenkins CI/CD setup
-│   └── MONITORING-SETUP-GUIDE.md   # Prometheus/Grafana setup
+│   ├── AMAZON-LINUX-COMPLETE-SETUP-GUIDE.md
+│   ├── HELM-SETUP-GUIDE.md
+│   ├── JENKINS-SETUP-GUIDE.md
+│   ├── MONITORING-SETUP-GUIDE.md
+│   └── DEVOPS-INTERVIEW-QUESTIONS.md
 │
 ├── 📂 monitoring/                  # Observability stack
 │   ├── prometheus-values.yaml      # Prometheus Helm values
 │   ├── grafana-values.yaml         # Grafana Helm values
 │   ├── install-monitoring.sh       # Installation script
 │   └── dashboards/
-│       └── shopdeploy-dashboard.json # Custom Grafana dashboard
+│       └── shopdeploy-dashboard.json
 │
-├── 📂 scripts/                     # Automation scripts
-│   ├── ec2-bootstrap.sh            # 🚀 Complete EC2 setup (Amazon Linux 2/2023)
-│   ├── install-docker.sh           # Docker + Docker Compose (AL2/AL2023)
-│   ├── install-jenkins.sh          # Jenkins LTS + Java 21 (AL2/AL2023)
-│   ├── install-sonarqube.sh        # SonarQube + PostgreSQL 15 (AL2)
-│   ├── install-grafana-prometheus.sh # Grafana 12.2 + Prometheus 3.5 + Node Exporter (AL2/AL2023)
-│   ├── install-terraform.sh        # Terraform via HashiCorp repo (AL2/AL2023)
-│   ├── install-kubectl.sh          # kubectl + autocompletion (AL2/AL2023)
-│   ├── install-helm.sh             # Helm 3 + common repos (AL2/AL2023)
-│   ├── install-awscli.sh           # AWS CLI v2 + eksctl (AL2/AL2023)
-│   ├── build.sh                    # Docker build script
-│   ├── push.sh                     # Docker push script
-│   ├── deploy.sh                   # Kubernetes deployment
-│   ├── rollback.sh                 # Rollback deployment
-│   ├── cleanup.sh                  # Cleanup resources
-│   ├── test.sh                     # Run tests
-│   ├── smoke-test.sh               # Smoke tests
-│   ├── helm-deploy.sh              # Helm deployment (Linux)
-│   ├── helm-deploy.ps1             # Helm deployment (Windows)
-│   ├── install-jenkins.ps1         # Install Jenkins (Windows)
-│   ├── install-monitoring.ps1      # Install monitoring (Windows)
-│   ├── terraform-init.sh           # Terraform init
-│   ├── terraform-apply.sh          # Terraform apply
-│   └── terraform-destroy.sh        # Terraform destroy
+├── 📂 scripts/                     # 🔥 Organized Automation Scripts
+│   ├── infra/                      # Infrastructure scripts
+│   │   ├── ec2-bootstrap.sh        # Complete EC2 setup
+│   │   ├── install-terraform.sh    # Terraform installation
+│   │   ├── install-awscli.sh       # AWS CLI + eksctl
+│   │   ├── terraform-init.sh       # Terraform init
+│   │   ├── terraform-apply.sh      # Terraform apply
+│   │   └── terraform-destroy.sh    # Terraform destroy
+│   ├── docker/                     # Docker scripts
+│   │   ├── build.sh                # Docker build
+│   │   ├── push.sh                 # Docker push
+│   │   ├── install-docker.sh       # Docker installation
+│   │   └── cleanup.sh              # Cleanup images
+│   ├── kubernetes/                 # Kubernetes scripts
+│   │   ├── deploy.sh               # K8s deployment
+│   │   ├── rollback.sh             # Rollback deployment
+│   │   ├── smoke-test.sh           # Smoke tests
+│   │   ├── helm-deploy.sh          # Helm deployment (Linux)
+│   │   ├── helm-deploy.ps1         # Helm deployment (Windows)
+│   │   ├── install-kubectl.sh      # kubectl installation
+│   │   └── install-helm.sh         # Helm installation
+│   ├── monitoring/                 # Monitoring/CI scripts
+│   │   ├── install-grafana-prometheus.sh
+│   │   ├── install-sonarqube.sh
+│   │   ├── install-jenkins.sh
+│   │   ├── install-jenkins.ps1
+│   │   └── install-monitoring.ps1
+│   └── test.sh                     # Run tests
 │
-├── 📄 Jenkinsfile                  # CI/CD Pipeline (16 stages)
+├── 📄 VERSION                      # 🔥 Semantic version (1.0.0)
 ├── 📄 docker-compose.yml           # Local development setup
 ├── 📄 .env.example                 # Environment template
 ├── 📄 .gitignore                   # Git ignore rules
@@ -266,6 +287,7 @@ ShopDeploy/
 ```
 
 ---
+
 
 ## 🏛️ Architecture
 
@@ -572,42 +594,64 @@ terraform destroy
 
 > 📖 For Jenkins setup guide, see [docs/JENKINS-SETUP-GUIDE.md](docs/JENKINS-SETUP-GUIDE.md)
 
-### Pipeline Overview
+### Pipeline Architecture: Build Once, Deploy Many
 
-The Jenkins pipeline automates the complete CI/CD workflow with 16 stages:
+The CI/CD workflow is split into two independent pipelines following the **"Build Once, Deploy Many"** principle:
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                        ShopDeploy CI/CD Pipeline                             │
+│                        ShopDeploy CI/CD Architecture                         │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   │
-│  │1.Checkout│──▶│2.Detect  │──▶│3.Install │──▶│ 4.Lint   │──▶│ 5.Tests  │   │
-│  │          │   │ Changes  │   │   Deps   │   │          │   │          │   │
-│  └──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘   │
-│                                                                     │        │
-│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐         │        │
-│  │10.Push   │◀──│9.Security│◀──│ 8.Build  │◀──│7.Quality │◀──┬─────┘        │
-│  │  ECR     │   │   Scan   │   │  Docker  │   │   Gate   │   │              │
-│  └────┬─────┘   └──────────┘   └──────────┘   └──────────┘   │              │
-│       │                                                       │              │
-│       │    ┌──────────────────────────────────────────────────┘              │
-│       │    │  6. SonarQube Analysis                                          │
-│       │    └──────────────────────────────────────────────────               │
-│       ▼                                                                      │
-│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   │
-│  │11.Deploy │──▶│12.Prod   │──▶│13.Deploy │──▶│14.Smoke  │──▶│15.Integ. │   │
-│  │Dev/Stage │   │ Approval │   │   Prod   │   │  Tests   │   │  Tests   │   │
-│  └──────────┘   └──────────┘   └──────────┘   └──────────┘   └────┬─────┘   │
-│                                                                    │         │
-│                                               ┌──────────┐         │         │
-│                                               │16.Cleanup│◀────────┘         │
-│                                               └──────────┘                   │
+│                         ┌─────────────────────┐                              │
+│                         │     Git Push        │                              │
+│                         └──────────┬──────────┘                              │
+│                                    ▼                                         │
+│  ┌───────────────────────────────────────────────────────────────────────┐   │
+│  │                    CI PIPELINE (Jenkinsfile-ci)                       │   │
+│  ├───────────────────────────────────────────────────────────────────────┤   │
+│  │  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐           │   │
+│  │  │1.Checkout│──▶│2.Detect  │──▶│3.Install │──▶│ 4.Lint   │           │   │
+│  │  │          │   │ Changes  │   │   Deps   │   │          │           │   │
+│  │  └──────────┘   └──────────┘   └──────────┘   └──────────┘           │   │
+│  │       │                                             │                 │   │
+│  │       ▼                                             ▼                 │   │
+│  │  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐           │   │
+│  │  │ 5.Tests  │──▶│6.SonarQube──▶│7.Quality │──▶│ 8.Build  │           │   │
+│  │  │          │   │          │   │   Gate   │   │  Docker  │           │   │
+│  │  └──────────┘   └──────────┘   └──────────┘   └──────────┘           │   │
+│  │                                                     │                 │   │
+│  │       ┌─────────────────────────────────────────────┘                 │   │
+│  │       ▼                                                               │   │
+│  │  ┌──────────┐   ┌──────────┐   ┌──────────┐                          │   │
+│  │  │9.Security│──▶│10.Push   │──▶│11.Save   │                          │   │
+│  │  │   Scan   │   │   ECR    │   │ Tag+Trigger                         │   │
+│  │  └──────────┘   └──────────┘   └────┬─────┘                          │   │
+│  └─────────────────────────────────────┼─────────────────────────────────┘   │
+│                                        │ IMAGE_TAG                           │
+│                                        ▼                                     │
+│  ┌───────────────────────────────────────────────────────────────────────┐   │
+│  │                    CD PIPELINE (Jenkinsfile-cd)                       │   │
+│  ├───────────────────────────────────────────────────────────────────────┤   │
+│  │  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐           │   │
+│  │  │1.Init    │──▶│2.Verify  │──▶│3.Prod    │──▶│4.Capture │           │   │
+│  │  │ Get Tag  │   │  Images  │   │ Approval │   │ Rollback │           │   │
+│  │  └──────────┘   └──────────┘   └──────────┘   └──────────┘           │   │
+│  │                                                     │                 │   │
+│  │       ┌─────────────────────────────────────────────┘                 │   │
+│  │       ▼                                                               │   │
+│  │  ┌──────────┐   ┌──────────┐   ┌──────────┐                          │   │
+│  │  │ 5.Deploy │──▶│6.Smoke   │──▶│7.Integ.  │                          │   │
+│  │  │  (Helm)  │   │  Tests   │   │  Tests   │                          │   │
+│  │  └──────────┘   └──────────┘   └──────────┘                          │   │
+│  │       │                                                               │   │
+│  │       └──────────▶ On Failure ──────▶ 🔄 AUTO ROLLBACK               │   │
+│  └───────────────────────────────────────────────────────────────────────┘   │
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### All 16 Pipeline Stages
+### CI Pipeline Stages (Jenkinsfile-ci)
 
 | Stage | Name | Description |
 |-------|------|-------------|
@@ -616,49 +660,72 @@ The Jenkins pipeline automates the complete CI/CD workflow with 16 stages:
 | 3 | **Install Dependencies** | Parallel `npm ci` for backend & frontend |
 | 4 | **Code Linting** | Parallel ESLint checks for both services |
 | 5 | **Unit Tests** | Parallel Jest tests with coverage reports |
-| 6 | **SonarQube Analysis** | Code quality analysis (optional) |
+| 6 | **SonarQube Analysis** | Code quality analysis (mandatory) |
 | 7 | **Quality Gate** | Verify SonarQube quality standards |
-| 8 | **Build Docker Images** | Parallel multi-stage Docker builds |
+| 8 | **Build Docker Images** | Parallel multi-stage Docker builds with layer caching |
 | 9 | **Security Scan** | Trivy vulnerability scanning (HIGH/CRITICAL) |
-| 10 | **Push to ECR** | Tag and push images to AWS ECR |
-| 11 | **Deploy Dev/Staging** | Helm deployment to non-prod EKS |
-| 12 | **Production Approval** | Manual approval gate for prod deploys |
-| 13 | **Deploy Production** | Helm deployment to production EKS |
-| 14 | **Smoke Tests** | Verify pod rollout and health checks |
-| 15 | **Integration Tests** | Run integration test suite |
-| 16 | **Cleanup** | Remove local Docker images to save space |
+| 10 | **Push to ECR** | Push immutable tags to AWS ECR (with retry) |
+| 11 | **Save Tag** | Archive IMAGE_TAG + store in AWS Parameter Store |
+| 12 | **Cleanup** | Remove local Docker images |
 
-### Pipeline Parameters
+### CD Pipeline Stages (Jenkinsfile-cd)
+
+| Stage | Name | Description |
+|-------|------|-------------|
+| 1 | **Initialize** | Get IMAGE_TAG from parameter or Parameter Store |
+| 2 | **Verify Images** | Confirm images exist in ECR before deployment |
+| 3 | **Production Approval** | Manual approval gate (prod only) |
+| 4 | **Capture Rollback Info** | Save current Helm revision for rollback |
+| 5 | **Deploy** | Helm upgrade to target environment |
+| 6 | **Smoke Tests** | Verify pod rollout and health checks |
+| 7 | **Integration Tests** | Run integration tests (non-prod only) |
+| - | **Auto Rollback** | Automatic Helm rollback on failure (prod) |
+
+### CI Pipeline Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `ENVIRONMENT` | Choice | `dev` | Target environment: `dev`, `staging`, `prod` |
 | `SKIP_TESTS` | Boolean | `false` | Skip unit test execution |
 | `SKIP_SONAR` | Boolean | `false` | Skip SonarQube analysis |
-| `FORCE_DEPLOY` | Boolean | `true` | Deploy even without code changes |
 | `RUN_SECURITY_SCAN` | Boolean | `true` | Run Trivy security scanning |
+| `TRIGGER_CD` | Boolean | `true` | Auto-trigger CD pipeline on success |
+| `TARGET_ENVIRONMENT` | Choice | `dev` | Target environment for CD trigger |
 
-### Running the Pipeline
+### CD Pipeline Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `IMAGE_TAG` | String | *(empty)* | Tag to deploy (fetches from Parameter Store if empty) |
+| `ENVIRONMENT` | Choice | `dev` | Target: `dev`, `staging`, `prod` |
+| `SKIP_SMOKE_TESTS` | Boolean | `false` | Skip smoke tests after deployment |
+| `DRY_RUN` | Boolean | `false` | Perform dry-run without actual deployment |
+
+### Running the Pipelines
 
 ```bash
-# Option 1: Trigger via GitHub webhook (automatic on push)
-# Option 2: Manual trigger in Jenkins UI with parameters
+# Automatic flow (recommended):
+# 1. Push code to GitHub
+# 2. CI pipeline triggers automatically
+# 3. On success, CI triggers CD pipeline with IMAGE_TAG
 
-# Example: Deploy to production
-# 1. Go to Jenkins > ShopDeploy > Build with Parameters
-# 2. Select ENVIRONMENT: prod
-# 3. Click Build
-# 4. Approve deployment at Stage 12 (Production Approval)
+# Manual CD deployment (promote existing image):
+# 1. Go to Jenkins > shopdeploy-cd > Build with Parameters
+# 2. Enter IMAGE_TAG (e.g., "42-a1b2c3d") or leave empty for latest
+# 3. Select ENVIRONMENT: prod
+# 4. Click Build
+# 5. Approve deployment at Production Approval stage
 ```
 
-### Pipeline Features
+### Key Features
 
-- ✅ **Parallel Execution**: Dependencies, linting, tests, and builds run in parallel
-- ✅ **Environment-Specific Configs**: Separate Helm values for dev/staging/prod
-- ✅ **Automatic Tool Installation**: kubectl, Helm, Trivy installed automatically
-- ✅ **Security Scanning**: Trivy scans for HIGH/CRITICAL vulnerabilities
-- ✅ **Health Verification**: Smoke tests verify pod rollout status
-- ✅ **Cleanup**: Automatic Docker image cleanup to save disk space
+- ✅ **Build Once, Deploy Many**: Same image flows dev → staging → prod
+- ✅ **Immutable Tags**: No `latest` tag - only `BUILD_NUMBER-commit` format
+- ✅ **Docker Layer Caching**: Faster builds using `--cache-from`
+- ✅ **Automatic Rollback**: Helm rollback on production failures
+- ✅ **Retry Logic**: ECR push retries for transient failures
+- ✅ **Slack Notifications**: Real-time deployment alerts
+- ✅ **Dry-Run Mode**: Test deployments without changes
+- ✅ **Parameter Store Integration**: Cross-pipeline IMAGE_TAG sharing
 
 ---
 

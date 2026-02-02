@@ -1,0 +1,30 @@
+# GitOps Values for Backend - Development Environment
+# These values are used by ArgoCD/Flux for GitOps deployments
+# CI pipeline updates the image.tag on successful builds
+
+image:
+  repository: "${ECR_REGISTRY}/shopdeploy-prod-backend"
+  tag: "latest"  # Updated by CI pipeline
+  pullPolicy: Always
+
+replicaCount: 1
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+env:
+  NODE_ENV: development
+  LOG_LEVEL: debug
+
+autoscaling:
+  enabled: false
+
+# Development-specific settings
+ingress:
+  enabled: true
+  host: api-dev.shopdeploy.com

@@ -1,4 +1,26 @@
-# ☸️ ShopDeploy Kubernetes Deployment
+# ☸️ ShopDeploy Kubernetes Reference Manifests
+
+> ## ⚠️ IMPORTANT: REFERENCE ONLY
+> 
+> **These manifests are for REFERENCE ONLY. Do NOT use for production deployments.**
+> 
+> The primary deployment method is **Helm Charts** located in `/helm/`.
+> 
+> ### Why Keep These?
+> | Purpose | Use Case |
+> |---------|----------|
+> | 📖 Learning | Understand raw Kubernetes concepts |
+> | 🔧 Debugging | Quick manual deployments for troubleshooting |
+> | 📋 Reference | See what Helm templates generate |
+> | 🎓 Training | Onboarding new team members |
+> 
+> ### ✅ Use Helm Instead
+> ```bash
+> helm upgrade --install shopdeploy-backend ./helm/backend -n shopdeploy
+> helm upgrade --install shopdeploy-frontend ./helm/frontend -n shopdeploy
+> ```
+
+---
 
 <p align="center">
   <img src="https://img.shields.io/badge/Kubernetes-1.29-326CE5?style=for-the-badge&logo=kubernetes" alt="Kubernetes"/>

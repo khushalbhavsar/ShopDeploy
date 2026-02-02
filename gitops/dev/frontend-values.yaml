@@ -1,0 +1,29 @@
+# GitOps Values for Frontend - Development Environment
+# These values are used by ArgoCD/Flux for GitOps deployments
+# CI pipeline updates the image.tag on successful builds
+
+image:
+  repository: "${ECR_REGISTRY}/shopdeploy-prod-frontend"
+  tag: "latest"  # Updated by CI pipeline
+  pullPolicy: Always
+
+replicaCount: 1
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi
+
+env:
+  VITE_API_URL: https://api-dev.shopdeploy.com/api
+
+autoscaling:
+  enabled: false
+
+# Development-specific settings
+ingress:
+  enabled: true
+  host: dev.shopdeploy.com

@@ -1,0 +1,33 @@
+# GitOps Values for Backend - Staging Environment
+# These values are used by ArgoCD/Flux for GitOps deployments
+# CI pipeline updates the image.tag on successful builds
+
+image:
+  repository: "${ECR_REGISTRY}/shopdeploy-prod-backend"
+  tag: "latest"  # Updated by CI pipeline
+  pullPolicy: Always
+
+replicaCount: 2
+
+resources:
+  limits:
+    cpu: 750m
+    memory: 768Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+env:
+  NODE_ENV: staging
+  LOG_LEVEL: info
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+
+# Staging-specific settings
+ingress:
+  enabled: true
+  host: api-staging.shopdeploy.com

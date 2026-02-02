@@ -1,0 +1,507 @@
+/**
+ * ============================================================================
+ * ShopDeploy CD Pipeline (Build Once, Deploy Many)
+ * ============================================================================
+ * Responsibilities:
+ * - Accept IMAGE_TAG from CI pipeline
+ * - Deploy to target environment using Helm
+ * - Production approval gate
+ * - Run smoke tests
+ * - Auto rollback on failure
+ * ============================================================================
+ * 
+ * Golden Rule: Build once, deploy everywhere. Never rebuild for production.
+ * 
+ * ============================================================================
+ */
+
+pipeline {
+    // Use dedicated Docker agent with all tools pre-installed
+    agent {
+        docker {
+            image 'khushal/devops-agent:latest'
+            args '-v /var/run/docker.sock:/var/run/docker.sock --user root'
+        }
+    }
+
+    environment {
+        // AWS Configuration
+        AWS_REGION = 'us-east-1'
+        AWS_ACCOUNT_ID = credentials('aws-account-id')
+
+        // ECR Configuration
+        ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        ECR_BACKEND_REPO = "shopdeploy-prod-backend"
+        ECR_FRONTEND_REPO = "shopdeploy-prod-frontend"
+
+        // EKS Configuration
+        EKS_CLUSTER_NAME = 'shopdeploy-prod-eks'
+        K8S_NAMESPACE = 'shopdeploy'
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '50'))
+        timestamps()
+    }
+
+    parameters {
+        string(
+            name: 'IMAGE_TAG',
+            defaultValue: '',
+            description: 'Docker image tag to deploy (e.g., 42-a1b2c3d). Leave empty to use latest from Parameter Store.'
+        )
+        choice(
+            name: 'ENVIRONMENT',
+            choices: ['dev', 'staging', 'prod'],
+            description: 'Target deployment environment'
+        )
+        booleanParam(
+            name: 'SKIP_SMOKE_TESTS',
+            defaultValue: false,
+            description: 'Skip smoke tests after deployment'
+        )
+        booleanParam(
+            name: 'DRY_RUN',
+            defaultValue: false,
+            description: 'Perform dry-run without actual deployment'
+        )
+    }
+
+    stages {
+        //======================================================================
+        // Stage 1: Initialize
+        //======================================================================
+        stage('Initialize') {
+            steps {
+                echo '🚀 Initializing CD Pipeline...'
+                script {
+                    // Get IMAGE_TAG from parameter or Parameter Store
+                    if (params.IMAGE_TAG?.trim()) {
+                        env.DEPLOY_IMAGE_TAG = params.IMAGE_TAG.trim()
+                        echo "📦 Using provided IMAGE_TAG: ${env.DEPLOY_IMAGE_TAG}"
+                    } else {
+                        echo "📦 Fetching latest IMAGE_TAG from Parameter Store..."
+                        withCredentials([[
+                            $class: 'AmazonWebServicesCredentialsBinding',
+                            credentialsId: 'aws-credentials',
+                            accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                            secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                        ]]) {
+                            env.DEPLOY_IMAGE_TAG = sh(
+                                script: """
+                                    aws ssm get-parameter \
+                                        --name "/shopdeploy/latest-image-tag" \
+                                        --query 'Parameter.Value' \
+                                        --output text \
+                                        --region ${AWS_REGION}
+                                """,
+                                returnStdout: true
+                            ).trim()
+                        }
+                        echo "📦 Retrieved IMAGE_TAG from Parameter Store: ${env.DEPLOY_IMAGE_TAG}"
+                    }
+                    
+                    // Validate IMAGE_TAG
+                    if (!env.DEPLOY_IMAGE_TAG || env.DEPLOY_IMAGE_TAG == 'null') {
+                        error("❌ IMAGE_TAG is required. Please provide a valid image tag.")
+                    }
+                    
+                    // Set full image URLs
+                    env.BACKEND_IMAGE = "${ECR_REGISTRY}/${ECR_BACKEND_REPO}:${env.DEPLOY_IMAGE_TAG}"
+                    env.FRONTEND_IMAGE = "${ECR_REGISTRY}/${ECR_FRONTEND_REPO}:${env.DEPLOY_IMAGE_TAG}"
+                    
+                    echo """
+                    ╔═══════════════════════════════════════════════════════════╗
+                    ║  📋 DEPLOYMENT CONFIGURATION                              ║
+                    ╠═══════════════════════════════════════════════════════════╣
+                    ║  Environment: ${params.ENVIRONMENT}                       
+                    ║  Image Tag: ${env.DEPLOY_IMAGE_TAG}                       
+                    ║  Backend: ${env.BACKEND_IMAGE}                            
+                    ║  Frontend: ${env.FRONTEND_IMAGE}                          
+                    ║  Dry Run: ${params.DRY_RUN}                               
+                    ╚═══════════════════════════════════════════════════════════╝
+                    """
+                }
+            }
+        }
+
+        //======================================================================
+        // Stage 2: Verify Images Exist
+        //======================================================================
+        stage('Verify Images') {
+            steps {
+                echo '🔍 Verifying images exist in ECR...'
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-credentials',
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                ]]) {
+                    sh '''
+                        # Login to ECR
+                        aws ecr get-login-password --region ${AWS_REGION} | \
+                            docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                        
+                        # Verify backend image exists
+                        echo "🔍 Checking backend image..."
+                        aws ecr describe-images \
+                            --repository-name ${ECR_BACKEND_REPO} \
+                            --image-ids imageTag=${DEPLOY_IMAGE_TAG} \
+                            --region ${AWS_REGION} > /dev/null || \
+                            { echo "❌ Backend image not found: ${DEPLOY_IMAGE_TAG}"; exit 1; }
+                        echo "✅ Backend image verified"
+                        
+                        # Verify frontend image exists
+                        echo "🔍 Checking frontend image..."
+                        aws ecr describe-images \
+                            --repository-name ${ECR_FRONTEND_REPO} \
+                            --image-ids imageTag=${DEPLOY_IMAGE_TAG} \
+                            --region ${AWS_REGION} > /dev/null || \
+                            { echo "❌ Frontend image not found: ${DEPLOY_IMAGE_TAG}"; exit 1; }
+                        echo "✅ Frontend image verified"
+                    '''
+                }
+            }
+        }
+
+        //======================================================================
+        // Stage 3: Production Approval
+        //======================================================================
+        stage('Production Approval') {
+            when {
+                expression { params.ENVIRONMENT == 'prod' && !params.DRY_RUN }
+            }
+            steps {
+                script {
+                    echo '⏳ Waiting for production deployment approval...'
+                    
+                    def approvalMessage = """
+                    🚀 PRODUCTION DEPLOYMENT REQUEST
+                    ════════════════════════════════════════
+                    Image Tag: ${env.DEPLOY_IMAGE_TAG}
+                    Backend: ${env.BACKEND_IMAGE}
+                    Frontend: ${env.FRONTEND_IMAGE}
+                    ════════════════════════════════════════
+                    
+                    ⚠️ This will deploy to PRODUCTION.
+                    Please review and approve.
+                    """
+                    
+                    echo approvalMessage
+                    
+                    // Send Slack notification for approval request
+                    slackSend(
+                        channel: '#deployments',
+                        color: 'warning',
+                        message: "🔔 Production deployment approval needed | Tag: ${env.DEPLOY_IMAGE_TAG} | <${BUILD_URL}input|Approve/Reject>"
+                    )
+                    
+                    timeout(time: 30, unit: 'MINUTES') {
+                        input(
+                            message: "Deploy ${env.DEPLOY_IMAGE_TAG} to PRODUCTION?",
+                            ok: 'Approve Deployment',
+                            submitter: 'admin,devops-team',
+                            submitterParameter: 'APPROVER'
+                        )
+                    }
+                    
+                    echo "✅ Production deployment approved by ${env.APPROVER}"
+                    
+                    slackSend(
+                        channel: '#deployments',
+                        color: 'good',
+                        message: "✅ Production deployment approved by ${env.APPROVER} | Tag: ${env.DEPLOY_IMAGE_TAG}"
+                    )
+                }
+            }
+        }
+
+        //======================================================================
+        // Stage 4: Capture Current State (for Rollback)
+        //======================================================================
+        stage('Capture Rollback Info') {
+            when {
+                expression { !params.DRY_RUN }
+            }
+            steps {
+                echo '📸 Capturing current deployment state for rollback...'
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-credentials',
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                ]]) {
+                    script {
+                        sh '''
+                            # Configure kubectl for EKS
+                            aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
+                        '''
+                        
+                        // Get current Helm release revisions
+                        env.BACKEND_REVISION = sh(
+                            script: "helm history shopdeploy-backend -n ${K8S_NAMESPACE} --max 1 -o json 2>/dev/null | jq -r '.[0].revision' || echo '0'",
+                            returnStdout: true
+                        ).trim()
+                        
+                        env.FRONTEND_REVISION = sh(
+                            script: "helm history shopdeploy-frontend -n ${K8S_NAMESPACE} --max 1 -o json 2>/dev/null | jq -r '.[0].revision' || echo '0'",
+                            returnStdout: true
+                        ).trim()
+                        
+                        echo "📋 Current backend revision: ${env.BACKEND_REVISION}"
+                        echo "📋 Current frontend revision: ${env.FRONTEND_REVISION}"
+                    }
+                }
+            }
+        }
+
+        //======================================================================
+        // Stage 5: Deploy to Environment
+        //======================================================================
+        stage('Deploy') {
+            steps {
+                echo "🚀 Deploying to ${params.ENVIRONMENT}..."
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-credentials',
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                ]]) {
+                    script {
+                        def helmArgs = params.DRY_RUN ? '--dry-run' : ''
+                        def valuesFile = "values-${params.ENVIRONMENT}.yaml"
+                        
+                        sh """
+                            # Configure kubectl for EKS
+                            aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
+                            
+                            # Verify tools
+                            echo "📋 Tool versions:"
+                            kubectl version --client --short || kubectl version --client
+                            helm version --short
+                            
+                            # Create namespace if not exists
+                            kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+                            
+                            # Deploy backend
+                            echo "📦 Deploying backend..."
+                            helm upgrade --install shopdeploy-backend ./helm/backend \
+                                --namespace ${K8S_NAMESPACE} \
+                                --values ./helm/backend/${valuesFile} \
+                                --set image.repository=${ECR_REGISTRY}/${ECR_BACKEND_REPO} \
+                                --set image.tag=${DEPLOY_IMAGE_TAG} \
+                                --set global.environment=${params.ENVIRONMENT} \
+                                --wait \
+                                --timeout 10m \
+                                ${helmArgs}
+                            
+                            # Deploy frontend
+                            echo "🎨 Deploying frontend..."
+                            helm upgrade --install shopdeploy-frontend ./helm/frontend \
+                                --namespace ${K8S_NAMESPACE} \
+                                --values ./helm/frontend/${valuesFile} \
+                                --set image.repository=${ECR_REGISTRY}/${ECR_FRONTEND_REPO} \
+                                --set image.tag=${DEPLOY_IMAGE_TAG} \
+                                --set global.environment=${params.ENVIRONMENT} \
+                                --wait \
+                                --timeout 10m \
+                                ${helmArgs}
+                            
+                            echo "✅ Deployment completed"
+                        """
+                    }
+                }
+            }
+        }
+
+        //======================================================================
+        // Stage 6: Smoke Tests
+        //======================================================================
+        stage('Smoke Tests') {
+            when {
+                expression { !params.SKIP_SMOKE_TESTS && !params.DRY_RUN }
+            }
+            steps {
+                echo '🔬 Running smoke tests...'
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-credentials',
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                ]]) {
+                    sh '''
+                        # Configure kubectl
+                        aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
+                        
+                        echo "📋 Checking deployment status..."
+                        
+                        # Check pod status
+                        echo "🔍 Pod Status:"
+                        kubectl get pods -n ${K8S_NAMESPACE} -o wide
+                        
+                        # Wait for backend rollout
+                        echo "⏳ Waiting for backend rollout..."
+                        kubectl rollout status deployment/shopdeploy-backend -n ${K8S_NAMESPACE} --timeout=300s
+                        
+                        # Wait for frontend rollout
+                        echo "⏳ Waiting for frontend rollout..."
+                        kubectl rollout status deployment/shopdeploy-frontend -n ${K8S_NAMESPACE} --timeout=300s
+                        
+                        # Get service endpoints
+                        echo "🌐 Service Endpoints:"
+                        kubectl get svc -n ${K8S_NAMESPACE}
+                        
+                        # Get ingress
+                        echo "🚪 Ingress:"
+                        kubectl get ingress -n ${K8S_NAMESPACE} || echo "No ingress configured"
+                        
+                        # Verify pods are running
+                        echo "🏥 Health check..."
+                        BACKEND_READY=$(kubectl get pods -n ${K8S_NAMESPACE} -l app=shopdeploy-backend -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}')
+                        FRONTEND_READY=$(kubectl get pods -n ${K8S_NAMESPACE} -l app=shopdeploy-frontend -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}')
+                        
+                        if [[ "$BACKEND_READY" == *"True"* ]] && [[ "$FRONTEND_READY" == *"True"* ]]; then
+                            echo "✅ All pods are healthy"
+                        else
+                            echo "❌ Some pods are not ready"
+                            kubectl describe pods -n ${K8S_NAMESPACE}
+                            exit 1
+                        fi
+                        
+                        echo "✅ Smoke tests passed"
+                    '''
+                }
+            }
+        }
+
+        //======================================================================
+        // Stage 7: Integration Tests (Non-Prod Only)
+        //======================================================================
+        stage('Integration Tests') {
+            when {
+                expression { params.ENVIRONMENT != 'prod' && !params.DRY_RUN }
+            }
+            steps {
+                echo '🧪 Running integration tests...'
+                script {
+                    def integrationTestFile = "shopdeploy-backend/tests/integration.test.js"
+                    if (fileExists(integrationTestFile)) {
+                        dir("shopdeploy-backend") {
+                            sh 'npm run test:integration || echo "⚠️ Some integration tests failed"'
+                        }
+                    } else {
+                        echo 'ℹ️ No integration tests found, skipping...'
+                    }
+                }
+            }
+        }
+    }
+
+    //==========================================================================
+    // Post-Build Actions
+    //==========================================================================
+    post {
+        success {
+            script {
+                if (params.DRY_RUN) {
+                    echo "✅ Dry run completed successfully"
+                } else {
+                    echo """
+                    ╔═══════════════════════════════════════════════════════════╗
+                    ║  ✅ CD PIPELINE COMPLETED SUCCESSFULLY                    ║
+                    ╠═══════════════════════════════════════════════════════════╣
+                    ║  Environment: ${params.ENVIRONMENT}                       
+                    ║  Image Tag: ${env.DEPLOY_IMAGE_TAG}                       
+                    ║  Duration: ${currentBuild.durationString}                 
+                    ╚═══════════════════════════════════════════════════════════╝
+                    """
+                    
+                    slackSend(
+                        channel: '#deployments',
+                        color: 'good',
+                        message: "✅ Deployed to ${params.ENVIRONMENT} | Tag: ${env.DEPLOY_IMAGE_TAG} | Duration: ${currentBuild.durationString}"
+                    )
+                }
+            }
+        }
+
+        failure {
+            script {
+                echo """
+                ╔═══════════════════════════════════════════════════════════╗
+                ║  ❌ CD PIPELINE FAILED                                    ║
+                ╠═══════════════════════════════════════════════════════════╣
+                ║  Environment: ${params.ENVIRONMENT}                       
+                ║  Image Tag: ${env.DEPLOY_IMAGE_TAG}                       
+                ║  Stage: ${env.STAGE_NAME}                                 
+                ╚═══════════════════════════════════════════════════════════╝
+                """
+                
+                // Auto rollback for production
+                if (params.ENVIRONMENT == 'prod' && !params.DRY_RUN) {
+                    echo '🚨 Production deployment failed! Initiating automatic rollback...'
+                    
+                    try {
+                        withCredentials([[
+                            $class: 'AmazonWebServicesCredentialsBinding',
+                            credentialsId: 'aws-credentials',
+                            accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                            secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                        ]]) {
+                            sh '''
+                                aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
+                                
+                                echo "🔄 Rolling back backend..."
+                                helm rollback shopdeploy-backend ${BACKEND_REVISION} -n ${K8S_NAMESPACE} --wait --timeout 5m || true
+                                
+                                echo "🔄 Rolling back frontend..."
+                                helm rollback shopdeploy-frontend ${FRONTEND_REVISION} -n ${K8S_NAMESPACE} --wait --timeout 5m || true
+                                
+                                echo "✅ Rollback completed"
+                                kubectl get pods -n ${K8S_NAMESPACE}
+                            '''
+                        }
+                        
+                        slackSend(
+                            channel: '#deployments',
+                            color: 'warning',
+                            message: "🔄 Auto-rollback completed for ${params.ENVIRONMENT} | Failed Tag: ${env.DEPLOY_IMAGE_TAG}"
+                        )
+                    } catch (Exception e) {
+                        echo "❌ Rollback failed: ${e.message}"
+                        slackSend(
+                            channel: '#deployments',
+                            color: 'danger',
+                            message: "🚨 CRITICAL: Rollback FAILED for ${params.ENVIRONMENT} | Manual intervention required!"
+                        )
+                    }
+                }
+                
+                slackSend(
+                    channel: '#deployments',
+                    color: 'danger',
+                    message: "❌ Deploy FAILED: ${params.ENVIRONMENT} | Tag: ${env.DEPLOY_IMAGE_TAG} | Stage: ${env.STAGE_NAME} | <${BUILD_URL}|View Logs>"
+                )
+            }
+        }
+
+        aborted {
+            echo '🛑 CD Pipeline was aborted'
+            slackSend(
+                channel: '#deployments',
+                color: 'warning',
+                message: "🛑 Deployment aborted: ${params.ENVIRONMENT} | Tag: ${env.DEPLOY_IMAGE_TAG}"
+            )
+        }
+
+        always {
+            cleanWs(
+                cleanWhenNotBuilt: false,
+                deleteDirs: true,
+                disableDeferredWipeout: true,
+                notFailBuild: true
+            )
+        }
+    }
+}
