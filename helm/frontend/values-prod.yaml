@@ -43,7 +43,7 @@ env:
 # Service Configuration (nginx-unprivileged listens on 8080)
 #------------------------------------------------------------------------------
 service:
-  type: ClusterIP
+  type: LoadBalancer
   port: 80
   targetPort: 8080
 

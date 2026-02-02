@@ -45,7 +45,7 @@ env:
 # Service Configuration
 #------------------------------------------------------------------------------
 service:
-  type: ClusterIP
+  type: LoadBalancer
   port: 5000
   targetPort: 5000
 
