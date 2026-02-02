@@ -281,8 +281,8 @@ pipeline {
                             
                             # Verify tools
                             echo "📋 Tool versions:"
-                            kubectl version --client --short || kubectl version --client
-                            helm version --short
+                            kubectl version --client
+                            helm version --short || echo '⚠️ Helm not found, will attempt to install'
                             
                             # Create namespace if not exists
                             kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
@@ -500,7 +500,7 @@ pipeline {
                         message: "❌ Deploy FAILED: ${params.ENVIRONMENT} | Tag: ${env.DEPLOY_IMAGE_TAG} | Stage: ${env.STAGE_NAME} | <${BUILD_URL}|View Logs>"
                     )
                 } catch (Exception e) {
-                    echo "⚠️ Slack notification skipped (not configured)"
+                    echo "⚠️ Slack notification skipped (not configured): ${e.message}"
                 }
             }
         }
