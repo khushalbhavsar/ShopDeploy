@@ -5,7 +5,7 @@
 
 global:
   environment: staging
-  namespace: shopdeploy-staging
+  # namespace is set via --namespace flag in helm command
 
 replicaCount: 2
 

@@ -5,7 +5,7 @@
 
 global:
   environment: production
-  namespace: shopdeploy
+  # namespace is set via --namespace flag in helm command
 
 replicaCount: 3
 
