@@ -310,38 +310,17 @@ pipeline {
         }
 
         //======================================================================
-        // Stage 8: SonarQube Analysis (Optional - Skips if not configured)
+        // Stage 8: SonarQube Analysis (Required)
         //======================================================================
         stage('SonarQube Analysis') {
             steps {
                 script {
-                    // Check if SonarQube Scanner tool is configured in Jenkins
-                    def sonarConfigured = true
-                    def scannerHome = ''
+                    echo "═══════════════════════════════════════════════════════════"
+                    echo "🔍 SONARQUBE CODE ANALYSIS"
+                    echo "═══════════════════════════════════════════════════════════"
                     
-                    try {
-                        scannerHome = tool 'sonar-scanner'
-                    } catch (Exception e) {
-                        sonarConfigured = false
-                    }
-                    
-                    if (!sonarConfigured) {
-                        echo "═══════════════════════════════════════════════════════════"
-                        echo "⚠️  SONARQUBE SCANNER NOT CONFIGURED - SKIPPING ANALYSIS"
-                        echo "═══════════════════════════════════════════════════════════"
-                        echo ""
-                        echo "To enable SonarQube code analysis, configure in Jenkins:"
-                        echo "  1. Manage Jenkins → Tools → SonarQube Scanner installations"
-                        echo "  2. Add SonarQube Scanner with name: 'sonar-scanner'"
-                        echo "  3. Manage Jenkins → System → SonarQube servers"
-                        echo ""
-                        echo "Pipeline will continue to Docker build..."
-                        echo "═══════════════════════════════════════════════════════════"
-                        env.SONAR_CONFIGURED = 'false'
-                        return  // Exit script block, continue pipeline
-                    }
-                    
-                    env.SONAR_CONFIGURED = 'true'
+                    // Get SonarQube Scanner tool - will fail if not configured
+                    def scannerHome = tool 'sonar-scanner'
                     
                     // Run Backend Scan
                     def backendCoverageFlag = ''
@@ -384,17 +363,16 @@ pipeline {
                             """
                         }
                     }
+                    
+                    echo "✅ SonarQube analysis completed"
                 }
             }
         }
 
         //======================================================================
-        // Stage 9: Quality Gate (Skips if SonarQube not configured)
+        // Stage 9: Quality Gate (Required - Fails pipeline if quality fails)
         //======================================================================
         stage('Quality Gate') {
-            when {
-                expression { env.SONAR_CONFIGURED == 'true' }
-            }
             steps {
                 echo 'Waiting for SonarQube Quality Gate...'
                 timeout(time: 10, unit: 'MINUTES') {
