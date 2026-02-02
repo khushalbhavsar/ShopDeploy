@@ -49,21 +49,6 @@ pipeline {
 
     parameters {
         booleanParam(
-            name: 'SKIP_TESTS',
-            defaultValue: false,
-            description: 'Skip running unit tests'
-        )
-        booleanParam(
-            name: 'SKIP_SONAR',
-            defaultValue: false,
-            description: 'Skip SonarQube analysis'
-        )
-        booleanParam(
-            name: 'RUN_SECURITY_SCAN',
-            defaultValue: true,
-            description: 'Run Docker image security scan'
-        )
-        booleanParam(
             name: 'TRIGGER_CD',
             defaultValue: true,
             description: 'Trigger CD pipeline after successful build'
@@ -192,9 +177,6 @@ pipeline {
         // Stage 5: Unit Tests
         //======================================================================
         stage('Unit Tests') {
-            when {
-                expression { !params.SKIP_TESTS }
-            }
             parallel {
                 stage('Backend Tests') {
                     steps {
@@ -230,9 +212,6 @@ pipeline {
         // Stage 6: SonarQube Analysis
         //======================================================================
         stage('SonarQube Analysis') {
-            when {
-                expression { params.SKIP_SONAR == false }
-            }
             steps {
                 script {
                     echo '📊 Running SonarQube analysis...'
@@ -261,9 +240,6 @@ pipeline {
         // Stage 7: Quality Gate
         //======================================================================
         stage('Quality Gate') {
-            when {
-                expression { params.SKIP_SONAR == false }
-            }
             steps {
                 script {
                     echo '🚦 Checking Quality Gate...'
@@ -355,9 +331,6 @@ pipeline {
         // Stage 9: Security Scan (Trivy)
         //======================================================================
         stage('Security Scan') {
-            when {
-                expression { params.RUN_SECURITY_SCAN }
-            }
             parallel {
                 stage('Scan Backend Image') {
                     steps {
