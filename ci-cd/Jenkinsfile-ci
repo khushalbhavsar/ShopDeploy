@@ -15,13 +15,8 @@
  */
 
 pipeline {
-    // 🔥 Use dedicated Docker agent with all tools pre-installed
-    agent {
-        docker {
-            image 'khushal/devops-agent:latest'
-            args '-v /var/run/docker.sock:/var/run/docker.sock --user root'
-        }
-    }
+    // 🔥 Run on Jenkins agent with Docker installed
+    agent any
 
     environment {
         // AWS Configuration
@@ -45,7 +40,7 @@ pipeline {
     }
 
     tools {
-        nodejs 'NodeJS-18'
+        nodejs '-'
     }
 
     options {
@@ -503,12 +498,16 @@ pipeline {
                 ╚═══════════════════════════════════════════════════════════╝
                 """
                 
-                // Slack notification
-                slackSend(
-                    channel: '#deployments',
-                    color: 'good',
-                    message: "✅ CI Build Success | Build #${BUILD_NUMBER} | Tag: ${IMAGE_TAG} | Duration: ${currentBuild.durationString}"
-                )
+                // Slack notification (optional - skip if not configured)
+                try {
+                    slackSend(
+                        channel: '#deployments',
+                        color: 'good',
+                        message: "✅ CI Build Success | Build #${BUILD_NUMBER} | Tag: ${IMAGE_TAG} | Duration: ${currentBuild.durationString}"
+                    )
+                } catch (Exception e) {
+                    echo "⚠️ Slack notification skipped (not configured)"
+                }
                 
                 // Trigger CD pipeline if enabled
                 if (params.TRIGGER_CD) {
@@ -535,21 +534,31 @@ pipeline {
                 ╚═══════════════════════════════════════════════════════════╝
                 """
                 
-                slackSend(
-                    channel: '#deployments',
-                    color: 'danger',
-                    message: "❌ CI Build FAILED | Build #${BUILD_NUMBER} | Stage: ${env.STAGE_NAME} | <${BUILD_URL}|View Logs>"
-                )
+                // Slack notification (optional - skip if not configured)
+                try {
+                    slackSend(
+                        channel: '#deployments',
+                        color: 'danger',
+                        message: "❌ CI Build FAILED | Build #${BUILD_NUMBER} | Stage: ${env.STAGE_NAME} | <${BUILD_URL}|View Logs>"
+                    )
+                } catch (Exception e) {
+                    echo "⚠️ Slack notification skipped (not configured)"
+                }
             }
         }
 
         unstable {
             echo '⚠️ CI Pipeline completed with warnings (unstable)'
-            slackSend(
-                channel: '#deployments',
-                color: 'warning',
-                message: "⚠️ CI Build Unstable | Build #${BUILD_NUMBER} | Tag: ${IMAGE_TAG}"
-            )
+            // Slack notification (optional - skip if not configured)
+            try {
+                slackSend(
+                    channel: '#deployments',
+                    color: 'warning',
+                    message: "⚠️ CI Build Unstable | Build #${BUILD_NUMBER} | Tag: ${IMAGE_TAG}"
+                )
+            } catch (Exception e) {
+                echo "⚠️ Slack notification skipped (not configured)"
+            }
         }
 
         always {
