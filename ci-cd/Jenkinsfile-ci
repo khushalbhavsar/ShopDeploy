@@ -253,64 +253,78 @@ pipeline {
         }
 
         //======================================================================
-        // Stage 7: SonarQube Analysis (Parallel - Separate Projects)
+        // Stage 7: SonarQube Analysis (Optional - Skips if not configured)
         //======================================================================
         stage('SonarQube Analysis') {
-            parallel {
-                stage('Backend Sonar Scan') {
-                    steps {
-                        script {
-                            def scannerHome = tool 'sonar-scanner'
-                            
-                            // Build coverage flag only if coverage exists
-                            def coverageFlag = ''
-                            if (env.BACKEND_COVERAGE_EXISTS == 'true') {
-                                coverageFlag = '-Dsonar.javascript.lcov.reportPaths=coverage/lcov.info'
-                            }
-                            
-                            withSonarQubeEnv('SonarQube') {
-                                dir("${BACKEND_DIR}") {
-                                    sh """
-                                        ${scannerHome}/bin/sonar-scanner \
-                                            -Dsonar.projectKey=shopdeploy-backend \
-                                            -Dsonar.projectName="ShopDeploy Backend" \
-                                            -Dsonar.sources=src \
-                                            -Dsonar.exclusions=**/node_modules/**,**/coverage/** \
-                                            -Dsonar.sourceEncoding=UTF-8 \
-                                            -Dsonar.branch.name=${env.BRANCH_NAME ?: 'main'} \
-                                            ${coverageFlag}
-                                    """
-                                }
-                            }
-                        }
+            steps {
+                script {
+                    // Check if SonarQube Scanner tool is configured in Jenkins
+                    def sonarConfigured = true
+                    def scannerHome = ''
+                    
+                    try {
+                        scannerHome = tool 'sonar-scanner'
+                    } catch (Exception e) {
+                        sonarConfigured = false
                     }
-                }
-
-                stage('Frontend Sonar Scan') {
-                    steps {
-                        script {
-                            def scannerHome = tool 'sonar-scanner'
-                            
-                            // Build coverage flag only if coverage exists
-                            def coverageFlag = ''
-                            if (env.FRONTEND_COVERAGE_EXISTS == 'true') {
-                                coverageFlag = '-Dsonar.javascript.lcov.reportPaths=coverage/lcov.info'
-                            }
-                            
-                            withSonarQubeEnv('SonarQube') {
-                                dir("${FRONTEND_DIR}") {
-                                    sh """
-                                        ${scannerHome}/bin/sonar-scanner \
-                                            -Dsonar.projectKey=shopdeploy-frontend \
-                                            -Dsonar.projectName="ShopDeploy Frontend" \
-                                            -Dsonar.sources=src \
-                                            -Dsonar.exclusions=**/node_modules/**,**/dist/** \
-                                            -Dsonar.sourceEncoding=UTF-8 \
-                                            -Dsonar.branch.name=${env.BRANCH_NAME ?: 'main'} \
-                                            ${coverageFlag}
-                                    """
-                                }
-                            }
+                    
+                    if (!sonarConfigured) {
+                        echo "═══════════════════════════════════════════════════════════"
+                        echo "⚠️  SONARQUBE SCANNER NOT CONFIGURED - SKIPPING ANALYSIS"
+                        echo "═══════════════════════════════════════════════════════════"
+                        echo ""
+                        echo "To enable SonarQube code analysis, configure in Jenkins:"
+                        echo "  1. Manage Jenkins → Tools → SonarQube Scanner installations"
+                        echo "  2. Add SonarQube Scanner with name: 'sonar-scanner'"
+                        echo "  3. Manage Jenkins → System → SonarQube servers"
+                        echo ""
+                        echo "Pipeline will continue to Docker build..."
+                        echo "═══════════════════════════════════════════════════════════"
+                        env.SONAR_CONFIGURED = 'false'
+                        return  // Exit script block, continue pipeline
+                    }
+                    
+                    env.SONAR_CONFIGURED = 'true'
+                    
+                    // Run Backend Scan
+                    def backendCoverageFlag = ''
+                    if (env.BACKEND_COVERAGE_EXISTS == 'true') {
+                        backendCoverageFlag = '-Dsonar.javascript.lcov.reportPaths=coverage/lcov.info'
+                    }
+                    
+                    withSonarQubeEnv('SonarQube') {
+                        dir("${BACKEND_DIR}") {
+                            echo "🔍 Scanning Backend with SonarQube..."
+                            sh """
+                                ${scannerHome}/bin/sonar-scanner \
+                                    -Dsonar.projectKey=shopdeploy-backend \
+                                    -Dsonar.projectName="ShopDeploy Backend" \
+                                    -Dsonar.sources=src \
+                                    -Dsonar.exclusions=**/node_modules/**,**/coverage/** \
+                                    -Dsonar.sourceEncoding=UTF-8 \
+                                    -Dsonar.branch.name=${env.BRANCH_NAME ?: 'main'} \
+                                    ${backendCoverageFlag}
+                            """
+                        }
+                        
+                        // Run Frontend Scan
+                        def frontendCoverageFlag = ''
+                        if (env.FRONTEND_COVERAGE_EXISTS == 'true') {
+                            frontendCoverageFlag = '-Dsonar.javascript.lcov.reportPaths=coverage/lcov.info'
+                        }
+                        
+                        dir("${FRONTEND_DIR}") {
+                            echo "🔍 Scanning Frontend with SonarQube..."
+                            sh """
+                                ${scannerHome}/bin/sonar-scanner \
+                                    -Dsonar.projectKey=shopdeploy-frontend \
+                                    -Dsonar.projectName="ShopDeploy Frontend" \
+                                    -Dsonar.sources=src \
+                                    -Dsonar.exclusions=**/node_modules/**,**/dist/** \
+                                    -Dsonar.sourceEncoding=UTF-8 \
+                                    -Dsonar.branch.name=${env.BRANCH_NAME ?: 'main'} \
+                                    ${frontendCoverageFlag}
+                            """
                         }
                     }
                 }
@@ -318,9 +332,12 @@ pipeline {
         }
 
         //======================================================================
-        // Stage 8: Quality Gate (Strict - No Bypass)
+        // Stage 8: Quality Gate (Skips if SonarQube not configured)
         //======================================================================
         stage('Quality Gate') {
+            when {
+                expression { env.SONAR_CONFIGURED == 'true' }
+            }
             steps {
                 echo 'Waiting for SonarQube Quality Gate...'
                 timeout(time: 10, unit: 'MINUTES') {
