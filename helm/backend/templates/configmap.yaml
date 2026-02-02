@@ -1,0 +1,20 @@
+{{- if .Values.configMapRef.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.configMapRef.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "backend.labels" . | nindent 4 }}
+data:
+  {{- if .Values.config }}
+  {{- range $key, $value := .Values.config }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  {{- else }}
+  NODE_ENV: {{ .Values.global.environment | default "production" | quote }}
+  PORT: {{ .Values.service.targetPort | default "5000" | quote }}
+  FRONTEND_URL: {{ .Values.frontendUrl | default "http://shopdeploy-frontend:80" | quote }}
+  LOG_LEVEL: {{ .Values.logLevel | default "info" | quote }}
+  {{- end }}
+{{- end }}

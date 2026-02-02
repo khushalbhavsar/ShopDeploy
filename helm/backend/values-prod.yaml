@@ -174,3 +174,21 @@ configMapRef:
 
 secretRef:
   enabled: false
+
+#------------------------------------------------------------------------------
+# ConfigMap Data (used when configMapRef.enabled is true)
+#------------------------------------------------------------------------------
+config:
+  NODE_ENV: "production"
+  PORT: "5000"
+  FRONTEND_URL: "http://shopdeploy-frontend:80"
+  LOG_LEVEL: "warn"
+
+#------------------------------------------------------------------------------
+# Secrets Data (used when secretRef.enabled is true)
+# WARNING: For production, use external secrets or sealed secrets
+#------------------------------------------------------------------------------
+secrets:
+  MONGODB_URI: "mongodb://mongodb:27017/shopdeploy"
+  JWT_ACCESS_SECRET: "CHANGE-THIS-IN-PRODUCTION"
+  JWT_REFRESH_SECRET: "CHANGE-THIS-IN-PRODUCTION"
