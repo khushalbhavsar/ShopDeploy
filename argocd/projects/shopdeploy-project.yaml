@@ -1,0 +1,69 @@
+# ArgoCD AppProject - ShopDeploy
+# Defines project-level access controls and resource restrictions
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: shopdeploy
+  namespace: argocd
+  labels:
+    app: shopdeploy
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: ShopDeploy E-Commerce Application Project
+
+  # Source repositories allowed
+  sourceRepos:
+    - 'https://github.com/YOUR_USERNAME/shopdeploy.git'
+    - 'https://github.com/YOUR_USERNAME/shopdeploy-gitops.git'
+
+  # Destination clusters and namespaces
+  destinations:
+    - namespace: shopdeploy-dev
+      server: https://kubernetes.default.svc
+    - namespace: shopdeploy-staging
+      server: https://kubernetes.default.svc
+    - namespace: shopdeploy-prod
+      server: https://kubernetes.default.svc
+    - namespace: argocd
+      server: https://kubernetes.default.svc
+
+  # Cluster resource whitelist
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+    - group: 'networking.k8s.io'
+      kind: IngressClass
+
+  # Namespace resource whitelist (all resources allowed in project namespaces)
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+
+  # Roles for project members
+  roles:
+    - name: developer
+      description: Developer access - can sync apps
+      policies:
+        - p, proj:shopdeploy:developer, applications, get, shopdeploy/*, allow
+        - p, proj:shopdeploy:developer, applications, sync, shopdeploy/*, allow
+      groups:
+        - shopdeploy-developers
+
+    - name: admin
+      description: Admin access - full control
+      policies:
+        - p, proj:shopdeploy:admin, applications, *, shopdeploy/*, allow
+        - p, proj:shopdeploy:admin, repositories, *, shopdeploy/*, allow
+      groups:
+        - shopdeploy-admins
+
+  # Sync windows for production (optional - restrict prod deployments to business hours)
+  # syncWindows:
+  #   - kind: allow
+  #     schedule: '0 9-17 * * 1-5'
+  #     duration: 8h
+  #     applications:
+  #       - 'shopdeploy-*-prod'
+  #     namespaces:
+  #       - shopdeploy-prod

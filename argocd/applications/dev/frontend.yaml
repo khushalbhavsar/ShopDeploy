@@ -1,0 +1,45 @@
+# ArgoCD Application - Frontend Development
+# This manifest defines the ArgoCD application for the frontend service in dev environment
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: shopdeploy-frontend-dev
+  namespace: argocd
+  labels:
+    app: shopdeploy
+    component: frontend
+    environment: dev
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: shopdeploy
+
+  source:
+    repoURL: https://github.com/YOUR_USERNAME/shopdeploy.git
+    targetRevision: main
+    path: helm/frontend
+    helm:
+      valueFiles:
+        - ../../gitops/dev/frontend-values.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: shopdeploy-dev
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  revisionHistoryLimit: 10

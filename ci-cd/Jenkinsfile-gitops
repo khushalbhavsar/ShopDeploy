@@ -1,0 +1,278 @@
+/**
+ * ============================================================================
+ * ShopDeploy GitOps Pipeline (ArgoCD Integration)
+ * ============================================================================
+ * This pipeline is a pure GitOps approach - it ONLY updates the GitOps
+ * repository. ArgoCD handles all deployments automatically.
+ * 
+ * Use this instead of Jenkinsfile-cd when using ArgoCD for deployments.
+ * ============================================================================
+ * 
+ * Flow:
+ * CI Pipeline → Build Image → Push to ECR → This Pipeline → Update GitOps → ArgoCD Deploys
+ * 
+ * ============================================================================
+ */
+
+pipeline {
+    agent any
+
+    environment {
+        // Git Configuration
+        GITOPS_REPO = 'https://github.com/khushalbhavsar/ShopDeploy-Cloud-Native-DevOps-Platform.git'
+        GITOPS_BRANCH = 'main'
+        
+        // AWS Configuration
+        AWS_REGION = 'us-east-1'
+    }
+
+    options {
+        timeout(time: 10, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+        timestamps()
+    }
+
+    parameters {
+        choice(
+            name: 'ENVIRONMENT',
+            choices: ['dev', 'staging', 'prod'],
+            description: '🌍 Target deployment environment'
+        )
+        string(
+            name: 'IMAGE_TAG',
+            defaultValue: '',
+            description: '🏷️ Docker image tag to deploy (e.g., 42-a1b2c3d)'
+        )
+        string(
+            name: 'BACKEND_IMAGE_TAG',
+            defaultValue: '',
+            description: '🔧 Backend image tag (if different from IMAGE_TAG)'
+        )
+        string(
+            name: 'FRONTEND_IMAGE_TAG',
+            defaultValue: '',
+            description: '🎨 Frontend image tag (if different from IMAGE_TAG)'
+        )
+    }
+
+    stages {
+        //======================================================================
+        // Stage 1: Validate Parameters
+        //======================================================================
+        stage('Validate') {
+            steps {
+                script {
+                    // Set environment emoji
+                    switch(params.ENVIRONMENT) {
+                        case 'prod':
+                            env.ENV_EMOJI = '🔴'
+                            break
+                        case 'staging':
+                            env.ENV_EMOJI = '🟡'
+                            break
+                        default:
+                            env.ENV_EMOJI = '🟢'
+                            break
+                    }
+
+                    echo "═══════════════════════════════════════════════════════════"
+                    echo "${env.ENV_EMOJI} GITOPS PIPELINE - ${params.ENVIRONMENT.toUpperCase()}"
+                    echo "═══════════════════════════════════════════════════════════"
+
+                    // Determine image tags
+                    if (params.IMAGE_TAG?.trim()) {
+                        env.BACKEND_TAG = params.BACKEND_IMAGE_TAG?.trim() ?: params.IMAGE_TAG.trim()
+                        env.FRONTEND_TAG = params.FRONTEND_IMAGE_TAG?.trim() ?: params.IMAGE_TAG.trim()
+                    } else {
+                        // Fetch from Parameter Store
+                        withCredentials([[
+                            $class: 'AmazonWebServicesCredentialsBinding',
+                            credentialsId: 'aws-credentials',
+                            accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                            secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                        ]]) {
+                            env.BACKEND_TAG = sh(
+                                script: '''
+                                    aws ssm get-parameter \
+                                        --name "/shopdeploy/latest-image-tag" \
+                                        --query 'Parameter.Value' \
+                                        --output text \
+                                        --region us-east-1
+                                ''',
+                                returnStdout: true
+                            ).trim()
+                            env.FRONTEND_TAG = env.BACKEND_TAG
+                        }
+                    }
+
+                    if (!env.BACKEND_TAG || !env.FRONTEND_TAG) {
+                        error("❌ Image tag is required!")
+                    }
+
+                    echo "Backend Tag: ${env.BACKEND_TAG}"
+                    echo "Frontend Tag: ${env.FRONTEND_TAG}"
+                }
+            }
+        }
+
+        //======================================================================
+        // Stage 2: Production Approval Gate
+        //======================================================================
+        stage('Production Approval') {
+            when {
+                expression { params.ENVIRONMENT == 'prod' }
+            }
+            steps {
+                script {
+                    echo "🔴 PRODUCTION DEPLOYMENT REQUIRES APPROVAL"
+                    
+                    def approvalMessage = """
+                    ═══════════════════════════════════════════════════════════
+                    🔴 PRODUCTION GITOPS UPDATE APPROVAL REQUIRED
+                    ═══════════════════════════════════════════════════════════
+                    
+                    Backend Image Tag: ${env.BACKEND_TAG}
+                    Frontend Image Tag: ${env.FRONTEND_TAG}
+                    
+                    This will update the GitOps repository and ArgoCD will
+                    automatically deploy to PRODUCTION.
+                    
+                    ═══════════════════════════════════════════════════════════
+                    """
+                    
+                    timeout(time: 30, unit: 'MINUTES') {
+                        input(
+                            message: approvalMessage,
+                            ok: '🚀 Approve Production Update',
+                            submitter: 'admin,devops-lead'
+                        )
+                    }
+                }
+            }
+        }
+
+        //======================================================================
+        // Stage 3: Update GitOps Repository
+        //======================================================================
+        stage('Update GitOps') {
+            steps {
+                echo "🔄 Updating GitOps repository..."
+                script {
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: 'github-credentials',
+                            usernameVariable: 'GIT_USER',
+                            passwordVariable: 'GIT_TOKEN'
+                        )
+                    ]) {
+                        sh """
+                            # Configure git
+                            git config user.email "jenkins@shopdeploy.com"
+                            git config user.name "Jenkins GitOps Bot"
+
+                            # Update backend values
+                            echo "📝 Updating backend image tag to ${env.BACKEND_TAG}..."
+                            sed -i 's|tag:.*|tag: "${env.BACKEND_TAG}"|g' gitops/${params.ENVIRONMENT}/backend-values.yaml
+
+                            # Update frontend values  
+                            echo "📝 Updating frontend image tag to ${env.FRONTEND_TAG}..."
+                            sed -i 's|tag:.*|tag: "${env.FRONTEND_TAG}"|g' gitops/${params.ENVIRONMENT}/frontend-values.yaml
+
+                            # Show diff
+                            echo "📋 Changes:"
+                            git diff gitops/${params.ENVIRONMENT}/
+
+                            # Commit changes
+                            git add gitops/${params.ENVIRONMENT}/
+                            git commit -m "🚀 [GitOps] Deploy to ${params.ENVIRONMENT}
+
+Backend: ${env.BACKEND_TAG}
+Frontend: ${env.FRONTEND_TAG}
+Pipeline: #${BUILD_NUMBER}
+Triggered by: ${BUILD_USER_ID ?: 'Jenkins'}
+
+[skip ci]" || echo "No changes to commit"
+
+                            # Push to remote
+                            git push https://\${GIT_USER}:\${GIT_TOKEN}@github.com/YOUR_USERNAME/shopdeploy.git HEAD:${GITOPS_BRANCH}
+                        """
+                    }
+                }
+            }
+        }
+
+        //======================================================================
+        // Stage 4: Verify ArgoCD Sync (Optional)
+        //======================================================================
+        stage('Verify ArgoCD Sync') {
+            steps {
+                echo "⏳ Waiting for ArgoCD to sync..."
+                script {
+                    // Give ArgoCD time to detect changes
+                    sleep(time: 30, unit: 'SECONDS')
+
+                    // Check ArgoCD application status (requires argocd CLI)
+                    sh """
+                        # Check if argocd CLI is available
+                        if command -v argocd &> /dev/null; then
+                            echo "Checking ArgoCD application status..."
+                            argocd app get shopdeploy-backend-${params.ENVIRONMENT} --refresh || true
+                            argocd app get shopdeploy-frontend-${params.ENVIRONMENT} --refresh || true
+                        else
+                            echo "ArgoCD CLI not installed - check ArgoCD UI for sync status"
+                            echo "Applications to verify:"
+                            echo "  - shopdeploy-backend-${params.ENVIRONMENT}"
+                            echo "  - shopdeploy-frontend-${params.ENVIRONMENT}"
+                        fi
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                echo "═══════════════════════════════════════════════════════════"
+                echo "${env.ENV_EMOJI} GITOPS UPDATE SUCCESS"
+                echo "═══════════════════════════════════════════════════════════"
+                echo "Environment: ${params.ENVIRONMENT.toUpperCase()}"
+                echo "Backend Tag: ${env.BACKEND_TAG}"
+                echo "Frontend Tag: ${env.FRONTEND_TAG}"
+                echo ""
+                echo "ArgoCD will automatically sync and deploy the changes."
+                echo "Check ArgoCD UI for deployment status."
+                echo "═══════════════════════════════════════════════════════════"
+
+                // Slack notification
+                try {
+                    slackSend(
+                        channel: '#deployments',
+                        color: 'good',
+                        message: "${env.ENV_EMOJI} GitOps Update | ${params.ENVIRONMENT.toUpperCase()} | Backend: ${env.BACKEND_TAG} | Frontend: ${env.FRONTEND_TAG}"
+                    )
+                } catch (Exception e) {
+                    echo "Slack notification skipped"
+                }
+            }
+        }
+
+        failure {
+            script {
+                echo "═══════════════════════════════════════════════════════════"
+                echo "❌ GITOPS UPDATE FAILED"
+                echo "═══════════════════════════════════════════════════════════"
+
+                try {
+                    slackSend(
+                        channel: '#deployments',
+                        color: 'danger',
+                        message: "❌ GitOps Update FAILED | ${params.ENVIRONMENT.toUpperCase()} | <${BUILD_URL}|View Logs>"
+                    )
+                } catch (Exception e) {
+                    echo "Slack notification skipped"
+                }
+            }
+        }
+    }
+}

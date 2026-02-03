@@ -1,0 +1,71 @@
+# ArgoCD ApplicationSet - All Environments
+# Generates applications for all environments using a single template
+# This is an alternative to individual application manifests
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: shopdeploy-apps
+  namespace: argocd
+spec:
+  generators:
+    - matrix:
+        generators:
+          # Environment generator
+          - list:
+              elements:
+                - environment: dev
+                  namespace: shopdeploy-dev
+                - environment: staging
+                  namespace: shopdeploy-staging
+                - environment: prod
+                  namespace: shopdeploy-prod
+          # Component generator
+          - list:
+              elements:
+                - component: backend
+                  path: helm/backend
+                - component: frontend
+                  path: helm/frontend
+
+  template:
+    metadata:
+      name: 'shopdeploy-{{component}}-{{environment}}'
+      namespace: argocd
+      labels:
+        app: shopdeploy
+        component: '{{component}}'
+        environment: '{{environment}}'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: shopdeploy
+
+      source:
+        repoURL: https://github.com/YOUR_USERNAME/shopdeploy.git
+        targetRevision: main
+        path: '{{path}}'
+        helm:
+          valueFiles:
+            - '../../gitops/{{environment}}/{{component}}-values.yaml'
+
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+          allowEmpty: false
+        syncOptions:
+          - CreateNamespace=true
+          - PrunePropagationPolicy=foreground
+          - PruneLast=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+
+      revisionHistoryLimit: 10

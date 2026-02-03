@@ -21,10 +21,13 @@
 - [Pipeline Jobs Creation](#-pipeline-jobs-creation)
 - [CI Pipeline Overview](#-ci-pipeline-overview)
 - [CD Pipeline Overview](#-cd-pipeline-overview)
+- [GitOps Pipeline Overview](#-gitops-pipeline-overview)
+- [How to Run Pipelines](#-how-to-run-pipelines)
 - [Pipeline Parameters](#-pipeline-parameters)
 - [Environment Configuration](#-environment-configuration)
 - [SonarQube Integration](#-sonarqube-integration)
 - [Slack Integration](#-slack-integration)
+- [ArgoCD Integration](#-argocd-integration)
 - [Troubleshooting](#-troubleshooting)
 - [Best Practices](#-best-practices)
 
@@ -454,6 +457,273 @@ environment {
     // Slack integration (set to 'true' when configured)
     SLACK_ENABLED = 'false'
 }
+```
+
+---
+
+## 🔄 GitOps Pipeline Overview
+
+### What is GitOps?
+
+GitOps is a modern deployment approach where **Git is the single source of truth** for your infrastructure and application deployments. Instead of Jenkins deploying directly to Kubernetes, it updates a Git repository, and **ArgoCD** automatically syncs those changes to the cluster.
+
+### Pipeline Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                        GITOPS PIPELINE FLOW                                  │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐  │
+│  │ Validate │──▶│Production│──▶│  Update  │──▶│  Verify  │──▶│  ArgoCD  │  │
+│  │   Params │   │ Approval │   │  GitOps  │   │   Sync   │   │ Auto-Sync│  │
+│  └──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘  │
+│                                                                              │
+│                                     │                                        │
+│                                     ▼                                        │
+│                            ┌────────────────┐                               │
+│                            │ gitops/{env}/  │                               │
+│                            │ values.yaml    │                               │
+│                            │ (image.tag)    │                               │
+│                            └────────────────┘                               │
+│                                     │                                        │
+│                                     ▼                                        │
+│                            ┌────────────────┐                               │
+│                            │    ArgoCD      │                               │
+│                            │  Detects &     │                               │
+│                            │    Syncs       │                               │
+│                            └────────────────┘                               │
+│                                     │                                        │
+│                                     ▼                                        │
+│                            ┌────────────────┐                               │
+│                            │      EKS       │                               │
+│                            │    Cluster     │                               │
+│                            └────────────────┘                               │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+### GitOps vs Traditional CD
+
+| Aspect | Traditional CD (Jenkinsfile-cd) | GitOps (Jenkinsfile-gitops) |
+|--------|--------------------------------|----------------------------|
+| **Deployment** | Jenkins runs `helm upgrade` | Jenkins updates Git, ArgoCD deploys |
+| **Source of Truth** | Jenkins pipeline | Git repository |
+| **Audit Trail** | Jenkins logs | Git history |
+| **Rollback** | Re-run pipeline | Git revert |
+| **Drift Detection** | Manual | Automatic (ArgoCD) |
+
+### GitOps Pipeline Stages
+
+| # | Stage | Description | Duration |
+|---|-------|-------------|----------|
+| 1 | **Validate** | Get IMAGE_TAG from parameter or AWS SSM | ~10s |
+| 2 | **Production Approval** | Manual approval gate (prod only) | Manual |
+| 3 | **Update GitOps** | Update image.tag in gitops/{env}/*.yaml | ~15s |
+| 4 | **Verify ArgoCD Sync** | Check ArgoCD detected changes | ~30s |
+
+**Total Duration:** ~1-2 minutes (excluding approval)
+
+### Environment Variables
+
+```groovy
+environment {
+    // Git Configuration
+    GITOPS_REPO = 'https://github.com/YOUR_USERNAME/shopdeploy.git'
+    GITOPS_BRANCH = 'main'
+    
+    // AWS Configuration
+    AWS_REGION = 'us-east-1'
+}
+```
+
+### Create GitOps Pipeline Job
+
+1. **New Item** → Enter name: `shopdeploy-gitops`
+2. Select: **Pipeline**
+3. Click: **OK**
+
+#### Configure GitOps Pipeline
+
+| Field | Value |
+|-------|-------|
+| Definition | Pipeline script from SCM |
+| SCM | Git |
+| Repository URL | `https://github.com/your-org/shopdeploy.git` |
+| Credentials | github-credentials |
+| Branch | `*/main` |
+| Script Path | `ci-cd/Jenkinsfile-gitops` |
+
+---
+
+## ▶️ How to Run Pipelines
+
+### 🟢 Option 1: Run via Jenkins UI (Recommended)
+
+#### Step 1: Access Jenkins
+
+```
+http://YOUR_JENKINS_IP:8080
+```
+
+Login with admin credentials.
+
+#### Step 2: Run CI Pipeline (Build & Push Images)
+
+```
+Jenkins Dashboard → shopdeploy-ci → Build with Parameters
+```
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| `TARGET_ENVIRONMENT` | `dev` / `staging` / `prod` | Target environment |
+| `TRIGGER_CD` | ✅ checked | Auto-trigger CD after success |
+
+Click **Build** → Watch console output.
+
+#### Step 3: Run CD Pipeline (Deploy with Helm)
+
+```
+Jenkins Dashboard → shopdeploy-cd → Build with Parameters
+```
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| `ENVIRONMENT` | `dev` / `staging` / `prod` | Target environment |
+| `IMAGE_TAG` | `42-abc1234` | Image tag (leave empty for latest) |
+| `SKIP_SMOKE_TESTS` | ❌ unchecked | Never skip for prod |
+| `DRY_RUN` | ❌ unchecked | Set true for testing |
+
+Click **Build** → Approve if production.
+
+#### Step 4: Run GitOps Pipeline (ArgoCD Auto-Deploy)
+
+```
+Jenkins Dashboard → shopdeploy-gitops → Build with Parameters
+```
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| `ENVIRONMENT` | `dev` / `staging` / `prod` | Target environment |
+| `IMAGE_TAG` | `42-abc1234` | Image tag to deploy |
+
+Click **Build** → ArgoCD auto-syncs.
+
+---
+
+### 🔵 Option 2: Run via Jenkins CLI
+
+```bash
+# Install Jenkins CLI
+wget http://YOUR_JENKINS_IP:8080/jnlpJars/jenkins-cli.jar
+
+# Run CI Pipeline
+java -jar jenkins-cli.jar -s http://YOUR_JENKINS_IP:8080 \
+  -auth admin:YOUR_API_TOKEN \
+  build shopdeploy-ci -p TARGET_ENVIRONMENT=dev -p TRIGGER_CD=true
+
+# Run CD Pipeline
+java -jar jenkins-cli.jar -s http://YOUR_JENKINS_IP:8080 \
+  -auth admin:YOUR_API_TOKEN \
+  build shopdeploy-cd -p ENVIRONMENT=dev -p IMAGE_TAG=42-abc1234
+
+# Run GitOps Pipeline
+java -jar jenkins-cli.jar -s http://YOUR_JENKINS_IP:8080 \
+  -auth admin:YOUR_API_TOKEN \
+  build shopdeploy-gitops -p ENVIRONMENT=dev -p IMAGE_TAG=42-abc1234
+```
+
+---
+
+### 🟣 Option 3: Auto-Trigger via GitHub Webhook
+
+#### Setup GitHub Webhook
+
+1. Go to GitHub Repository → **Settings** → **Webhooks**
+2. Click **Add webhook**
+3. Configure:
+
+| Field | Value |
+|-------|-------|
+| Payload URL | `http://YOUR_JENKINS_IP:8080/github-webhook/` |
+| Content type | `application/json` |
+| Events | `Just the push event` |
+
+4. Click **Add webhook**
+
+Now every `git push` to `main` branch will automatically trigger the CI pipeline!
+
+---
+
+### 🔄 Pipeline Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    TRADITIONAL FLOW (CI → CD)                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Developer          Jenkins CI            Jenkins CD            EKS        │
+│       │                  │                      │                 │         │
+│  git push ──────────────>│                      │                 │         │
+│       │                  │  Build & Push ECR    │                 │         │
+│       │                  │─────────────────────>│                 │         │
+│       │                  │                      │  Helm Deploy    │         │
+│       │                  │                      │────────────────>│         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    GITOPS FLOW (CI → GitOps → ArgoCD)                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Developer       Jenkins CI     Jenkins GitOps      ArgoCD        EKS      │
+│       │               │               │                │            │       │
+│  git push ───────────>│               │                │            │       │
+│       │               │ Build & Push  │                │            │       │
+│       │               │──────────────>│                │            │       │
+│       │               │               │ Update Git     │            │       │
+│       │               │               │───────────────>│            │       │
+│       │               │               │                │ Auto Sync  │       │
+│       │               │               │                │───────────>│       │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 🎯 Which Pipeline to Use?
+
+| Scenario | Pipeline | Command |
+|----------|----------|---------|
+| **First build (no ArgoCD)** | CI → CD | Run `shopdeploy-ci` with TRIGGER_CD=true |
+| **ArgoCD installed** | CI → GitOps | Run `shopdeploy-ci`, then `shopdeploy-gitops` |
+| **Deploy existing image** | CD only | Run `shopdeploy-cd` with IMAGE_TAG |
+| **GitOps deploy existing image** | GitOps only | Run `shopdeploy-gitops` with IMAGE_TAG |
+| **Emergency rollback** | CD with old tag | Run `shopdeploy-cd` with previous IMAGE_TAG |
+| **GitOps rollback** | Git revert | `git revert` in gitops/ folder |
+
+---
+
+### ⚡ Quick Deploy Commands
+
+```bash
+# Full CI/CD (Traditional)
+# 1. CI builds and pushes image
+# 2. CD deploys to environment
+Build: shopdeploy-ci → TARGET_ENVIRONMENT=dev, TRIGGER_CD=true
+
+# Full CI/GitOps (Modern)
+# 1. CI builds and pushes image
+# 2. GitOps updates values, ArgoCD deploys
+Build: shopdeploy-ci → TARGET_ENVIRONMENT=dev, TRIGGER_CD=false
+Build: shopdeploy-gitops → ENVIRONMENT=dev, IMAGE_TAG=<from CI>
+
+# Quick Deploy (Skip Build)
+# Deploy existing image directly
+Build: shopdeploy-cd → ENVIRONMENT=prod, IMAGE_TAG=42-abc1234
+
+# GitOps Quick Deploy
+Build: shopdeploy-gitops → ENVIRONMENT=prod, IMAGE_TAG=42-abc1234
 ```
 
 ---
@@ -1240,7 +1510,166 @@ rm -rf ~/.sonar/cache
 
 ---
 
-## 🔧 Troubleshooting
+## � ArgoCD Integration
+
+### What is ArgoCD?
+
+ArgoCD is a declarative, GitOps continuous delivery tool for Kubernetes. It automatically syncs your cluster state with the desired state defined in Git.
+
+### ArgoCD vs Jenkins CD
+
+| Feature | Jenkins CD | ArgoCD |
+|---------|-----------|--------|
+| **Deployment Method** | Push-based (Jenkins pushes to cluster) | Pull-based (ArgoCD pulls from Git) |
+| **Source of Truth** | Jenkins pipeline | Git repository |
+| **Drift Detection** | Manual | Automatic |
+| **Self-Healing** | No | Yes |
+| **Audit Trail** | Jenkins logs | Git history |
+| **Rollback** | Re-run pipeline | Git revert |
+
+### Prerequisites
+
+1. **Install ArgoCD on EKS**
+
+```bash
+# Create namespace
+kubectl create namespace argocd
+
+# Install ArgoCD
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+# Wait for pods
+kubectl wait --for=condition=Ready pods --all -n argocd --timeout=300s
+```
+
+2. **Expose ArgoCD UI**
+
+```bash
+# LoadBalancer (AWS)
+kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "LoadBalancer"}}'
+
+# Get URL
+kubectl get svc argocd-server -n argocd
+```
+
+3. **Get Admin Password**
+
+```bash
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+```
+
+### Project Structure
+
+```
+argocd/
+├── applications/
+│   ├── dev/
+│   │   ├── backend.yaml      # ArgoCD Application for backend
+│   │   └── frontend.yaml     # ArgoCD Application for frontend
+│   ├── staging/
+│   └── prod/
+├── applicationsets/
+│   └── all-environments.yaml # Alternative: Single manifest for all envs
+├── notifications/
+│   ├── notifications-cm.yaml # Slack notification config
+│   └── notifications-secret.yaml
+└── projects/
+    └── shopdeploy-project.yaml
+```
+
+### GitOps Values Structure
+
+```
+gitops/
+├── dev/
+│   ├── backend-values.yaml   # image.tag updated by CI
+│   └── frontend-values.yaml
+├── staging/
+└── prod/
+```
+
+### Deploy ArgoCD Applications
+
+```bash
+# Deploy project first
+kubectl apply -f argocd/projects/shopdeploy-project.yaml
+
+# Deploy applications
+kubectl apply -f argocd/applications/dev/
+kubectl apply -f argocd/applications/staging/
+kubectl apply -f argocd/applications/prod/
+
+# OR use ApplicationSet (all at once)
+kubectl apply -f argocd/applicationsets/all-environments.yaml
+```
+
+### Verify in ArgoCD UI
+
+```
+1. Open: https://ARGOCD_LOADBALANCER_IP
+2. Login: admin / <password from secret>
+3. View applications:
+   - shopdeploy-backend-dev
+   - shopdeploy-frontend-dev
+   - shopdeploy-backend-staging
+   - etc.
+4. Status should be: Healthy + Synced
+```
+
+### GitOps Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     GITOPS WORKFLOW                             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   1. CI Pipeline                                                 │
+│      └── Builds image → Pushes to ECR                           │
+│                                                                  │
+│   2. GitOps Pipeline (or CI auto-updates)                        │
+│      └── Updates gitops/{env}/backend-values.yaml               │
+│          └── Changes image.tag: "42-abc1234"                    │
+│                                                                  │
+│   3. Git Push                                                    │
+│      └── Changes committed to main branch                       │
+│                                                                  │
+│   4. ArgoCD Detects Change (within 3 minutes)                   │
+│      └── Compares Git vs Cluster state                          │
+│                                                                  │
+│   5. ArgoCD Auto-Syncs                                          │
+│      └── Deploys new image to EKS                               │
+│                                                                  │
+│   6. ArgoCD Self-Heals                                          │
+│      └── Reverts any manual kubectl changes                     │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### ArgoCD CLI Commands
+
+```bash
+# Login
+argocd login <ARGOCD_SERVER> --username admin --password <PASSWORD>
+
+# List applications
+argocd app list
+
+# Get app status
+argocd app get shopdeploy-backend-dev
+
+# Manual sync
+argocd app sync shopdeploy-backend-dev
+
+# Rollback
+argocd app rollback shopdeploy-backend-dev
+
+# View diff
+argocd app diff shopdeploy-backend-dev
+```
+
+---
+
+## �🔧 Troubleshooting
 
 ### Common Issues
 
@@ -1712,8 +2141,14 @@ helm rollback shopdeploy-backend 1 -n shopdeploy-prod
 |------|----------|---------|
 | CI Pipeline | `ci-cd/Jenkinsfile-ci` | CI pipeline definition |
 | CD Pipeline | `ci-cd/Jenkinsfile-cd` | CD pipeline definition |
+| GitOps Pipeline | `ci-cd/Jenkinsfile-gitops` | GitOps/ArgoCD pipeline definition |
 | Backend Helm | `helm/backend/` | Backend deployment chart |
 | Frontend Helm | `helm/frontend/` | Frontend deployment chart |
+| GitOps Values | `gitops/` | Environment-specific Helm values for ArgoCD |
+| ArgoCD Apps | `argocd/applications/` | ArgoCD Application manifests |
+| ArgoCD Project | `argocd/projects/` | ArgoCD AppProject definition |
+| ArgoCD Notifications | `argocd/notifications/` | Slack notifications config |
+| ArgoCD README | `argocd/README.md` | ArgoCD setup guide |
 | Install Script | `scripts/monitoring/install-jenkins.sh` | Jenkins installation |
 
 ---

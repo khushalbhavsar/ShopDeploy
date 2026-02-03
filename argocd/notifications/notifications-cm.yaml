@@ -1,0 +1,89 @@
+# ArgoCD Notifications ConfigMap
+# Configure Slack notifications for deployment events
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-notifications-cm
+  namespace: argocd
+data:
+  # Slack service configuration
+  service.slack: |
+    token: $slack-token
+    
+  # Notification templates
+  template.app-deployed: |
+    message: |
+      {{if eq .app.status.operationState.phase "Succeeded"}}✅{{else}}❌{{end}} Application *{{.app.metadata.name}}* is now {{.app.status.sync.status}}.
+      
+      *Environment:* {{.app.metadata.labels.environment}}
+      *Component:* {{.app.metadata.labels.component}}
+      *Revision:* {{.app.status.sync.revision}}
+      *Health:* {{.app.status.health.status}}
+      
+      {{if eq .app.status.operationState.phase "Succeeded"}}
+      🚀 Deployment successful!
+      {{else}}
+      ⚠️ Deployment needs attention
+      {{end}}
+    slack:
+      attachments: |
+        [{
+          "color": "{{if eq .app.status.operationState.phase \"Succeeded\"}}good{{else}}danger{{end}}",
+          "fields": [
+            {"title": "Application", "value": "{{.app.metadata.name}}", "short": true},
+            {"title": "Environment", "value": "{{.app.metadata.labels.environment}}", "short": true},
+            {"title": "Health", "value": "{{.app.status.health.status}}", "short": true},
+            {"title": "Sync", "value": "{{.app.status.sync.status}}", "short": true}
+          ]
+        }]
+
+  template.app-sync-failed: |
+    message: |
+      ❌ Application *{{.app.metadata.name}}* sync failed!
+      
+      *Environment:* {{.app.metadata.labels.environment}}
+      *Error:* {{.app.status.operationState.message}}
+    slack:
+      attachments: |
+        [{
+          "color": "danger",
+          "fields": [
+            {"title": "Application", "value": "{{.app.metadata.name}}", "short": true},
+            {"title": "Environment", "value": "{{.app.metadata.labels.environment}}", "short": true}
+          ]
+        }]
+
+  template.app-health-degraded: |
+    message: |
+      ⚠️ Application *{{.app.metadata.name}}* health is {{.app.status.health.status}}
+      
+      *Environment:* {{.app.metadata.labels.environment}}
+      *Status:* {{.app.status.health.message}}
+
+  # Triggers
+  trigger.on-deployed: |
+    - description: Application synced and healthy
+      when: app.status.operationState.phase in ['Succeeded'] and app.status.health.status == 'Healthy'
+      send:
+        - app-deployed
+        
+  trigger.on-sync-failed: |
+    - description: Application sync failed
+      when: app.status.operationState.phase in ['Error', 'Failed']
+      send:
+        - app-sync-failed
+
+  trigger.on-health-degraded: |
+    - description: Application health degraded
+      when: app.status.health.status == 'Degraded'
+      send:
+        - app-health-degraded
+
+  # Default subscriptions
+  subscriptions: |
+    - recipients:
+        - slack:deployments
+      triggers:
+        - on-deployed
+        - on-sync-failed
+        - on-health-degraded

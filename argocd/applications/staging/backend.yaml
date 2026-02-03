@@ -1,0 +1,45 @@
+# ArgoCD Application - Backend Staging
+# This manifest defines the ArgoCD application for the backend service in staging environment
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: shopdeploy-backend-staging
+  namespace: argocd
+  labels:
+    app: shopdeploy
+    component: backend
+    environment: staging
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: shopdeploy
+
+  source:
+    repoURL: https://github.com/YOUR_USERNAME/shopdeploy.git
+    targetRevision: main
+    path: helm/backend
+    helm:
+      valueFiles:
+        - ../../gitops/staging/backend-values.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: shopdeploy-staging
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  revisionHistoryLimit: 10

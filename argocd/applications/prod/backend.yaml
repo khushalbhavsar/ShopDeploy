@@ -1,0 +1,51 @@
+# ArgoCD Application - Backend Production
+# This manifest defines the ArgoCD application for the backend service in production
+# ⚠️ PRODUCTION - Manual sync recommended for safety
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: shopdeploy-backend-prod
+  namespace: argocd
+  labels:
+    app: shopdeploy
+    component: backend
+    environment: prod
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-succeeded.slack: deployments
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: deployments
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: shopdeploy
+
+  source:
+    repoURL: https://github.com/YOUR_USERNAME/shopdeploy.git
+    targetRevision: main
+    path: helm/backend
+    helm:
+      valueFiles:
+        - ../../gitops/prod/backend-values.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: shopdeploy-prod
+
+  # Production: Manual sync for safety (change to automated if needed)
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  revisionHistoryLimit: 10

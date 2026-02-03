@@ -589,7 +589,72 @@ pipeline {
         }
 
         //======================================================================
-        // Stage 14: Cleanup
+        // Stage 14: Update GitOps Repository (ArgoCD Auto-Deploy)
+        //======================================================================
+        stage('Update GitOps') {
+            when {
+                expression { params.TRIGGER_CD == true }
+            }
+            steps {
+                echo '🔄 Updating GitOps repository for ArgoCD auto-deployment...'
+                script {
+                    def targetEnv = params.TARGET_ENVIRONMENT ?: 'dev'
+                    
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: 'github-credentials',
+                            usernameVariable: 'GIT_USER',
+                            passwordVariable: 'GIT_TOKEN'
+                        )
+                    ]) {
+                        sh """
+                            # Configure git
+                            git config user.email "jenkins@shopdeploy.com"
+                            git config user.name "Jenkins CI Bot"
+
+                            # Update backend values
+                            echo "Updating backend image tag to ${IMAGE_TAG}..."
+                            sed -i 's|tag:.*|tag: "${IMAGE_TAG}"|g' gitops/${targetEnv}/backend-values.yaml
+
+                            # Update frontend values
+                            echo "Updating frontend image tag to ${IMAGE_TAG}..."
+                            sed -i 's|tag:.*|tag: "${IMAGE_TAG}"|g' gitops/${targetEnv}/frontend-values.yaml
+
+                            # Check if there are changes to commit
+                            if git diff --quiet gitops/; then
+                                echo "No changes to commit"
+                            else
+                                # Commit and push changes
+                                git add gitops/${targetEnv}/
+                                git commit -m "🚀 Deploy ${IMAGE_TAG} to ${targetEnv} [skip ci]
+
+Environment: ${targetEnv}
+Image Tag: ${IMAGE_TAG}
+Build: #${BUILD_NUMBER}
+Commit: ${GIT_COMMIT}"
+                                
+                                # Push using token authentication
+                                git push https://\${GIT_USER}:\${GIT_TOKEN}@github.com/YOUR_USERNAME/shopdeploy.git HEAD:main
+                                
+                                echo "✅ GitOps repository updated successfully!"
+                                echo "ArgoCD will auto-sync and deploy the new image."
+                            fi
+                        """
+                    }
+                }
+            }
+            post {
+                success {
+                    echo "✅ GitOps update completed - ArgoCD will deploy automatically"
+                }
+                failure {
+                    echo "⚠️ GitOps update failed - Manual deployment may be required"
+                }
+            }
+        }
+
+        //======================================================================
+        // Stage 15: Cleanup
         //======================================================================
         stage('Cleanup') {
             steps {
