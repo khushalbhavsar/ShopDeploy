@@ -4,7 +4,7 @@
 
 image:
   repository: "${ECR_REGISTRY}/shopdeploy-prod-frontend"
-  tag: "latest"  # Updated by CI pipeline
+  tag: "6-4f76d77"
   pullPolicy: Always
 
 replicaCount: 1
