@@ -9,6 +9,7 @@
   <img src="https://img.shields.io/badge/Kubernetes-EKS-326CE5?style=for-the-badge&logo=kubernetes" alt="Kubernetes"/>
   <img src="https://img.shields.io/badge/Terraform-IaC-7B42BC?style=for-the-badge&logo=terraform" alt="Terraform"/>
   <img src="https://img.shields.io/badge/Jenkins-CI%2FCD-D24939?style=for-the-badge&logo=jenkins" alt="Jenkins"/>
+  <img src="https://img.shields.io/badge/ArgoCD-GitOps-EF7B4D?style=for-the-badge&logo=argo" alt="ArgoCD"/>
   <img src="https://img.shields.io/badge/Amazon_Linux-2023-FF9900?style=for-the-badge&logo=amazon-aws" alt="Amazon Linux"/>
 </p>
 
@@ -32,6 +33,7 @@
 - [Kubernetes Deployment](#-kubernetes-deployment)
 - [Infrastructure (Terraform)](#-infrastructure-terraform)
 - [CI/CD Pipeline](#-cicd-pipeline)
+- [GitOps with ArgoCD](#-gitops-with-argocd)
 - [Monitoring](#-monitoring)
 - [API Documentation](#-api-documentation)
 - [Environment Variables](#-environment-variables)
@@ -50,7 +52,8 @@
 | 🐳 **Containerization** | Docker | Consistent application packaging |
 | ☸️ **Orchestration** | AWS EKS (Kubernetes) | Container orchestration & scaling |
 | 🔄 **CI/CD Pipeline** | Jenkins | Automated build, test, and deployment |
-| 📊 **Monitoring** | Prometheus & Grafana | Metrics collection and visualization |
+| � **GitOps** | ArgoCD | Declarative continuous deployment |
+| �📊 **Monitoring** | Prometheus & Grafana | Metrics collection and visualization |
 | 📦 **Package Management** | Helm Charts | Kubernetes application packaging |
 | 🔐 **Security** | JWT, HTTPS, IAM Roles | Authentication and authorization |
 
@@ -114,9 +117,11 @@
 | Kubernetes (EKS) | Orchestration |
 | Terraform | Infrastructure as Code |
 | Jenkins | CI/CD Pipeline |
+| ArgoCD | GitOps Deployment |
 | Helm | Package Management |
 | Prometheus | Monitoring |
 | Grafana | Visualization |
+| SonarQube | Code Quality |
 | AWS | Cloud Provider |
 
 ---
@@ -131,7 +136,8 @@
 ShopDeploy/
 ├── 📂 ci-cd/                       # 🔥 CI/CD Pipeline Definitions
 │   ├── Jenkinsfile-ci              # CI Pipeline (Build, Test, Push)
-│   └── Jenkinsfile-cd              # CD Pipeline (Deploy, Rollback)
+│   ├── Jenkinsfile-cd              # CD Pipeline (Deploy, Rollback)
+│   └── Jenkinsfile-gitops          # GitOps Pipeline (ArgoCD sync)
 │
 ├── 📂 shopdeploy-backend/          # Backend API (Node.js/Express)
 │   ├── src/
@@ -209,6 +215,20 @@ ShopDeploy/
 │       ├── values-prod.yaml
 │       └── templates/
 │
+├── 📂 argocd/                      # 🔥 ArgoCD GitOps Configuration
+│   ├── README.md                   # ArgoCD setup documentation
+│   ├── applications/               # Application manifests
+│   │   ├── dev/                    # Development environment apps
+│   │   ├── staging/                # Staging environment apps
+│   │   └── prod/                   # Production environment apps
+│   ├── applicationsets/
+│   │   └── all-environments.yaml   # Multi-environment ApplicationSet
+│   ├── notifications/              # ArgoCD notification configs
+│   │   ├── notifications-cm.yaml   # Notification ConfigMap
+│   │   └── notifications-secret.yaml
+│   └── projects/
+│       └── shopdeploy-project.yaml # ArgoCD Project definition
+│
 ├── 📂 gitops/                      # 🔥 GitOps Values (ArgoCD/Flux)
 │   ├── README.md                   # GitOps documentation
 │   ├── dev/
@@ -237,12 +257,13 @@ ShopDeploy/
 │   └── rollback-strategy.md        # Rollback procedures
 │
 ├── 📂 docs/                        # Documentation
-│   ├── AMAZON-LINUX-COMPLETE-SETUP-GUIDE.md
-│   ├── HELM-SETUP-GUIDE.md
-│   ├── JENKINS-SETUP-GUIDE.md
-│   ├── MONITORING-SETUP-GUIDE.md
-│   ├── DEVOPS-INTERVIEW-QUESTIONS.md
-│   └── Project_Flow_Diagram.png    # Architecture diagram
+│   ├── AMAZON-LINUX-COMPLETE-SETUP-GUIDE.md  # Complete EC2 setup guide
+│   ├── COMPLETE-DEVOPS-SETUP-GUIDE.md        # Full DevOps setup guide
+│   ├── argocd.md                             # ArgoCD documentation
+│   ├── jenkins-pipline-setup.md              # Jenkins pipeline setup
+│   ├── project-tools.md                      # Project tools overview
+│   ├── DEVOPS-INTERVIEW-QUESTIONS.md         # DevOps Q&A reference
+│   └── ProjectFlow.png                       # Architecture diagram
 │
 ├── 📂 monitoring/                  # Observability stack
 │   ├── prometheus-values.yaml      # Prometheus Helm values
@@ -252,6 +273,7 @@ ShopDeploy/
 │       └── shopdeploy-dashboard.json
 │
 ├── 📂 scripts/                     # 🔥 Organized Automation Scripts
+│   ├── test.sh                     # Run tests
 │   ├── infra/                      # Infrastructure scripts
 │   │   ├── ec2-bootstrap.sh        # Complete EC2 setup
 │   │   ├── install-terraform.sh    # Terraform installation
@@ -272,15 +294,15 @@ ShopDeploy/
 │   │   ├── helm-deploy.ps1         # Helm deployment (Windows)
 │   │   ├── install-kubectl.sh      # kubectl installation
 │   │   └── install-helm.sh         # Helm installation
-│   ├── monitoring/                 # Monitoring/CI scripts
-│   │   ├── install-grafana-prometheus.sh
-│   │   ├── install-sonarqube.sh
-│   │   ├── install-jenkins.sh
-│   │   ├── install-jenkins.ps1
-│   │   └── install-monitoring.ps1
-│   └── test.sh                     # Run tests
+│   └── monitoring/                 # Monitoring/CI scripts
+│       ├── install-grafana-prometheus.sh
+│       ├── install-sonarqube.sh
+│       ├── install-jenkins.sh
+│       ├── install-jenkins.ps1
+│       └── install-monitoring.ps1
 │
 ├── 📄 docker-compose.yml           # Local development setup
+├── 📄 sonar-project.properties     # SonarQube configuration
 ├── 📄 .env.example                 # Environment template
 ├── 📄 .env                         # Environment variables (gitignored)
 ├── 📄 .gitattributes               # Git attributes
@@ -309,11 +331,12 @@ ShopDeploy/
 | **Orchestration** | Cluster | AWS EKS | Kubernetes management |
 | **Infrastructure** | IaC | Terraform | Infrastructure provisioning |
 | **CI/CD** | Pipeline | Jenkins | Build, test, deploy automation |
+| **GitOps** | Deployment | ArgoCD | Declarative continuous deployment |
 | **Monitoring** | Metrics | Prometheus | Metrics collection |
 | **Monitoring** | Dashboards | Grafana | Visualization |
 | **Code Quality** | Analysis | SonarQube Community | Static code analysis |
 
-> 📊 See [docs/Project_Flow_Diagram.png](docs/Project_Flow_Diagram.png) for visual architecture diagram.
+> 📊 See [docs/ProjectFlow.png](docs/ProjectFlow.png) for visual architecture diagram.
 
 ---
 
@@ -649,11 +672,19 @@ terraform destroy
 
 ## 🔄 CI/CD Pipeline
 
-> 📖 For Jenkins setup guide, see [docs/JENKINS-SETUP-GUIDE.md](docs/JENKINS-SETUP-GUIDE.md)
+> 📖 For Jenkins setup guide, see [docs/jenkins-pipline-setup.md](docs/jenkins-pipline-setup.md)
 
 ### Pipeline Architecture: Build Once, Deploy Many
 
-The CI/CD workflow is split into two independent pipelines following the **"Build Once, Deploy Many"** principle:
+The CI/CD workflow is split into independent pipelines following the **"Build Once, Deploy Many"** principle:
+
+| Pipeline | File | Purpose |
+|----------|------|---------|
+| **CI Pipeline** | `Jenkinsfile-ci` | Build, test, scan, push to ECR |
+| **CD Pipeline** | `Jenkinsfile-cd` | Direct Helm deployment to Kubernetes |
+| **GitOps Pipeline** | `Jenkinsfile-gitops` | Update GitOps repo for ArgoCD deployment |
+
+> **Note**: Use either `Jenkinsfile-cd` (direct deployment) OR `Jenkinsfile-gitops` (ArgoCD), not both.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -787,9 +818,65 @@ The CI/CD workflow is split into two independent pipelines following the **"Buil
 
 ---
 
-## 📊 Monitoring
+## � GitOps with ArgoCD
 
-> 📖 For monitoring setup, see [docs/MONITORING-SETUP-GUIDE.md](docs/MONITORING-SETUP-GUIDE.md)
+> 📖 For detailed ArgoCD setup, see [argocd/README.md](argocd/README.md) and [docs/argocd.md](docs/argocd.md)
+
+### Overview
+
+ShopDeploy uses ArgoCD for GitOps-based continuous deployment, enabling declarative, version-controlled application deployments.
+
+### GitOps Structure
+
+| Directory | Purpose |
+|-----------|---------|
+| `argocd/applications/` | ArgoCD Application manifests per environment |
+| `argocd/applicationsets/` | Multi-environment ApplicationSet definitions |
+| `argocd/projects/` | ArgoCD Project configuration |
+| `argocd/notifications/` | Slack notification configuration |
+| `gitops/` | Environment-specific Helm value overrides |
+
+### Quick Start
+
+```bash
+# Install ArgoCD on EKS
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+# Get ArgoCD admin password
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+
+# Apply ShopDeploy ArgoCD project
+kubectl apply -f argocd/projects/shopdeploy-project.yaml
+
+# Deploy applications (choose environment)
+kubectl apply -f argocd/applications/dev/
+# OR use ApplicationSet for all environments
+kubectl apply -f argocd/applicationsets/all-environments.yaml
+```
+
+### Environment-Specific Values
+
+The `gitops/` folder contains environment-specific Helm value overrides:
+
+```
+gitops/
+├── dev/
+│   ├── backend-values.yaml     # Dev backend configuration
+│   └── frontend-values.yaml    # Dev frontend configuration
+├── staging/
+│   ├── backend-values.yaml     # Staging configuration
+│   └── frontend-values.yaml
+└── prod/
+    ├── backend-values.yaml     # Production configuration
+    └── frontend-values.yaml
+```
+
+---
+
+## �📊 Monitoring
+
+> 📖 For monitoring setup, see [monitoring/install-monitoring.sh](monitoring/install-monitoring.sh) and [docs/COMPLETE-DEVOPS-SETUP-GUIDE.md](docs/COMPLETE-DEVOPS-SETUP-GUIDE.md)
 
 ### Stack
 
