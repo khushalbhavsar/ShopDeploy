@@ -4,7 +4,7 @@
 
 image:
   repository: "${ECR_REGISTRY}/shopdeploy-prod-backend"
-  tag: "3-b7c870a"
+  tag: "4-331249a"
   pullPolicy: Always
 
 replicaCount: 1
