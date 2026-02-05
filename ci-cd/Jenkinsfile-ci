@@ -67,9 +67,9 @@ pipeline {
         )
     }
 
-    triggers {
-        githubPush()
-    }
+    // triggers {
+    //     githubPush()  // Disabled - Manual builds only
+    // }
 
     stages {
         //======================================================================
